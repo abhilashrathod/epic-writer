@@ -419,6 +419,20 @@ export const jobs = {
   findById: (db: Db, id: ObjectId) => col(db, 'jobs').findOne({ _id: id }),
   findInProject: (db: Db, projectId: ObjectId, id: ObjectId) =>
     col(db, 'jobs').findOne({ _id: id, projectId }),
+  /** A project's jobs of one type that read any of `documentKeys`, newest first. */
+  listForDocuments: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; type: JobType; documentKeys: string[] },
+  ) =>
+    col(db, 'jobs')
+      .find({
+        projectId: p.projectId,
+        branchId: p.branchId,
+        type: p.type,
+        'input.documentKey': { $in: p.documentKeys },
+      })
+      .sort({ createdAt: -1 })
+      .toArray(),
 
   /**
    * Atomically claims the oldest runnable job: queued and due, or running with an expired lock
@@ -551,6 +565,16 @@ export const proposals = {
   listForDocument: (db: Db, p: Scope & { documentKey: string }) =>
     col(db, 'proposals')
       .find({ projectId: p.projectId, branchId: p.branchId, 'source.documentKey': p.documentKey })
+      .sort({ createdAt: -1 })
+      .toArray(),
+  /** The proposals of any of `documentKeys`, newest first. */
+  listForDocuments: (db: Db, p: Scope & { documentKeys: string[] }) =>
+    col(db, 'proposals')
+      .find({
+        projectId: p.projectId,
+        branchId: p.branchId,
+        'source.documentKey': { $in: p.documentKeys },
+      })
       .sort({ createdAt: -1 })
       .toArray(),
   /**

@@ -155,11 +155,14 @@ function renumber(ordered: DocumentDoc[], parentPath: string, all: DocumentDoc[]
   return changes;
 }
 
-/** Adds a season, episode, chapter... under `parentKey` (or at the top of the work). */
+/**
+ * Adds a season, episode, chapter... under `parentKey` (or at the top of the work). `contentType`
+ * overrides the work's default, e.g. notes in a prose work.
+ */
 export async function createDocument(
   db: Db,
   ctx: ProjectContext,
-  input: { workKey: string; parentKey: string | null; title?: string },
+  input: { workKey: string; parentKey: string | null; title?: string; contentType?: ContentType },
 ): Promise<string> {
   const work = await readHeadByKey(db, 'works', ctx.scope, input.workKey);
   if (!work) throw new NotFound('Work not found');
@@ -178,13 +181,14 @@ export async function createDocument(
   const number = siblings.length + 1;
   const key = uuidv7();
   const title = input.title?.trim() || label(lvl, number);
+  const contentType = input.contentType ?? work.defaultContentType;
   const data = {
     workKey: work.key,
     parentKey: parent?.key ?? null,
     levelKey: lvl.key,
     kind,
-    contentType: work.defaultContentType,
-    format: work.defaultContentType === 'screenplay' ? 'fountain' : 'markdown',
+    contentType,
+    format: contentType === 'screenplay' ? 'fountain' : 'markdown',
     title,
     number,
     orderPath: joinPath(parent?.orderPath ?? '', number),

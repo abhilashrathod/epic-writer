@@ -143,6 +143,12 @@ export function CodexBrowser() {
         >
           Ask the codex
         </Link>
+        <Link
+          href={`/projects/${projectId}/import`}
+          className={`px-2 text-sm text-muted hover:text-ink ${focusRing}`}
+        >
+          Import notes
+        </Link>
       </nav>
 
       <section aria-label="Entries" className="flex min-w-0 flex-1 flex-col gap-4">

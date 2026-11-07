@@ -196,6 +196,13 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - When something is ambiguous, pick the option most consistent with this file and say which you picked.
 - If you change a convention, update this file in the same change.
 
+## Import, export and backups
+
+- Fountain import (IO-2): `core.importFountain` creates the script with `createDocument`, takes its title from the Fountain title page (else the file name), normalises line endings and assigns scene keys before the first save. The browser reads the file and posts it as JSON (`@epic/schemas/io`); there is no upload storage.
+- Fountain/Markdown export (IO-3): `core.exportDocumentText` strips identity markers with `stripMarkers`; Fountain files start with a `Title:` page so they re-import under the same title.
+- Backups (IO-7): `core.exportProject` returns every row of every project-scoped collection (`PROJECT_COLLECTIONS` in `packages/db/backup.ts`), all versions, as EJSON. It never includes `users` (AI keys) or `templates`; only the owner's name. Download it from project settings.
+- Nightly backups: the worker enqueues one `export` job per project per 24h (checked every 10 minutes) and writes `BACKUP_DIR/<projectId>/<YYYY-MM-DD>.json.gz`, keeping the newest 14. `BACKUP_DIR` must be absolute and outside the repo; unset turns nightly backups off. Never commit backups: this repo is public.
+
 ## Glossary
 
 - **Project** — one world (Aryavarta). Hard wall: nothing crosses projects.

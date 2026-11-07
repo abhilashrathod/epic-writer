@@ -3,7 +3,7 @@
 import * as Menu from '@radix-ui/react-dropdown-menu';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import type { StoryTimeShape } from '@epic/core/calendar';
 import type { DocumentDto, WorkDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
@@ -11,8 +11,12 @@ import { api } from '../lib/api-client';
 import { useTree, useTreeMutation } from '../lib/use-tree';
 import { useEntities, useTypes } from '../lib/use-types';
 import { StoryDateInput } from './codex/StoryDateInput';
+import { FountainImport } from './FountainImport';
 import { NewWorkForm } from './NewWorkForm';
 import { useWorkspace } from './Workspace';
+
+// Media whose works default to screenplay text (mirrors DEFAULT_STRUCTURES; the server decides).
+const SCRIPT_MEDIA = new Set(['series', 'film', 'short', 'stage', 'game']);
 
 const menuItem =
   'flex cursor-default rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-sunk';
@@ -43,9 +47,16 @@ export function WorksTree({ onNavigate }: { onNavigate: () => void }) {
       {adding ? (
         <NewWorkForm onDone={() => setAdding(false)} />
       ) : (
-        <Button className="self-start" onClick={() => setAdding(true)}>
-          + New work
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setAdding(true)}>+ New work</Button>
+          <Link
+            href={`/projects/${projectId}/import`}
+            onClick={onNavigate}
+            className={`rounded-md px-2 text-sm font-medium text-muted hover:text-ink ${focusRing}`}
+          >
+            Import notes
+          </Link>
+        </div>
       )}
     </div>
   );
@@ -68,6 +79,8 @@ function WorkNode({
     }),
   );
   const top = work.levels[0];
+  const importRef = useRef<HTMLInputElement>(null);
+  const importHere = work.levels.length === 1 && SCRIPT_MEDIA.has(work.medium);
   return (
     <section className="flex flex-col gap-1" aria-label={work.name}>
       <p className="text-xs font-medium uppercase tracking-wide text-faint">{work.name}</p>
@@ -85,10 +98,22 @@ function WorkNode({
             />
           ))}
       </ul>
-      {top && (
-        <Button className="self-start" onClick={() => add.mutate(null)} disabled={add.isPending}>
-          + Add {top.singular.toLowerCase()}
-        </Button>
+      <div className="flex gap-1">
+        {top && (
+          <Button onClick={() => add.mutate(null)} disabled={add.isPending}>
+            + Add {top.singular.toLowerCase()}
+          </Button>
+        )}
+        {importHere && <Button onClick={() => importRef.current?.click()}>Import Fountain…</Button>}
+      </div>
+      {importHere && (
+        <FountainImport
+          workKey={work.key}
+          parentKey={null}
+          label={`Fountain file to import into ${work.name}`}
+          inputRef={importRef}
+          onNavigate={onNavigate}
+        />
       )}
       {add.error && (
         <p role="alert" className="text-sm text-bad">
@@ -122,6 +147,9 @@ function DocNode(props: {
   const open = params.documentKey === doc.key;
   const children = all.filter((d) => d.parentKey === doc.key);
   const childLevel = work.levels[work.levels.findIndex((l) => l.key === doc.levelKey) + 1];
+  // Scripts import where the bottom (text) level of a screenplay work goes.
+  const importHere = doc.format === 'fountain' && !!childLevel && childLevel === work.levels.at(-1);
+  const importRef = useRef<HTMLInputElement>(null);
 
   function rename(e: FormEvent) {
     e.preventDefault();
@@ -200,6 +228,11 @@ function DocNode(props: {
                     Add {childLevel.singular.toLowerCase()}
                   </Menu.Item>
                 )}
+                {importHere && (
+                  <Menu.Item className={menuItem} onSelect={() => importRef.current?.click()}>
+                    Import Fountain…
+                  </Menu.Item>
+                )}
                 <Menu.Item className={menuItem} onSelect={() => setMode('rename')}>
                   Rename
                 </Menu.Item>
@@ -232,6 +265,15 @@ function DocNode(props: {
         </div>
       )}
 
+      {importHere && (
+        <FountainImport
+          workKey={work.key}
+          parentKey={doc.key}
+          label={`Fountain file to import into ${doc.title}`}
+          inputRef={importRef}
+          onNavigate={props.onNavigate}
+        />
+      )}
       {mode === 'time' && calendar && (
         <form
           onSubmit={saveTime}

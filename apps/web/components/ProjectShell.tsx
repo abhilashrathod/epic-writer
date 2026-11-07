@@ -38,6 +38,7 @@ export function ProjectShell({
             ['timeline', 'Timeline'],
             ['storylines', 'Storylines'],
             ['ask', 'Ask the codex'],
+            ['import', 'Import notes'],
             ['settings', 'AI settings'],
           ].map(([path, label]) => (
             <Link

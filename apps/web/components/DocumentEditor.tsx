@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { mentionMarker } from '@epic/fountain';
 import type { MentionCandidate } from '@epic/fountain/mentions';
 import type { DocumentTextDto } from '@epic/schemas/api';
-import { Button } from '@epic/ui';
+import { Button, focusRing } from '@epic/ui';
 import { api } from '../lib/api-client';
 import { useContinuity } from '../lib/use-continuity';
 import { useDocumentSync, type SaveStatus } from '../lib/use-document-sync';
@@ -201,6 +201,15 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
             >
               History
             </Button>
+          )}
+          {!focus && (
+            <a
+              href={`${base}/download`}
+              download
+              className={`inline-flex h-9 items-center rounded-md px-2 text-sm font-medium text-muted hover:text-ink ${focusRing}`}
+            >
+              Download .{document.format === 'fountain' ? 'fountain' : 'md'}
+            </a>
           )}
           {focus && (
             <Button onClick={() => setShowScenes((s) => !s)} aria-expanded={showScenes}>

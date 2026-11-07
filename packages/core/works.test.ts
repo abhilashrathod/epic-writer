@@ -80,6 +80,15 @@ describe('works and documents', () => {
     );
   });
 
+  it('lets a document override the work’s content type', async () => {
+    const workKey = await createWork(db, ctx, { name: 'Film', medium: 'film' });
+    await createDocument(db, ctx, { workKey, parentKey: null, contentType: 'note' });
+    expect((await getTree(db, ctx)).documents[0]).toMatchObject({
+      contentType: 'note',
+      format: 'markdown',
+    });
+  });
+
   it('renames through a new version', async () => {
     const { e1 } = await series();
     await renameDocument(db, ctx, e1, '  The Vow ');

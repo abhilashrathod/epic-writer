@@ -9,17 +9,22 @@ export class ApiError extends Error {
   }
 }
 
-/** fetch wrapper for our JSON API: throws ApiError carrying the server's message and body. */
+/**
+ * fetch wrapper for our JSON API: throws ApiError carrying the server's message and body. A
+ * FormData body is sent as a multipart upload; anything else as JSON.
+ */
 export async function api<T>(
   url: string,
   init?: { method?: string; body?: unknown; keepalive?: boolean },
 ): Promise<T> {
+  const body = init?.body;
+  const json = body !== undefined && !(body instanceof FormData);
   let res: Response;
   try {
     res = await fetch(url, {
       method: init?.method ?? 'GET',
-      headers: init?.body === undefined ? undefined : { 'content-type': 'application/json' },
-      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+      headers: json ? { 'content-type': 'application/json' } : undefined,
+      body: json ? JSON.stringify(body) : (body as FormData | undefined),
       keepalive: init?.keepalive,
     });
   } catch {

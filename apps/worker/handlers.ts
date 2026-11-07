@@ -4,11 +4,14 @@ import type { JobDoc, JobType } from '@epic/db';
 import { ask } from './handlers/ask';
 import { extract } from './handlers/extract';
 import { continuityHandler } from './handlers/continuity';
+import { exportBackup } from './handlers/export';
 
 export interface HandlerContext {
   db: Db;
   /** KEY_ENCRYPTION_SECRET, for decrypting the project owner's AI key. */
   keySecret: string;
+  /** BACKUP_DIR, where nightly backups go; unset turns them off. */
+  backupDir?: string;
 }
 
 /** Runs one job and returns its output. Throwing marks the attempt failed. */
@@ -24,4 +27,5 @@ export const handlers: Handlers = {
   ask,
   extract,
   continuity: continuityHandler,
+  export: exportBackup,
 };

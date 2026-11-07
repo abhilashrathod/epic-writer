@@ -18,7 +18,13 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
 logger.info('worker started', { workerId: env.WORKER_ID });
 try {
   await runLoop(
-    { db, workerId: env.WORKER_ID, handlers, keySecret: env.KEY_ENCRYPTION_SECRET },
+    {
+      db,
+      workerId: env.WORKER_ID,
+      handlers,
+      keySecret: env.KEY_ENCRYPTION_SECRET,
+      backupDir: env.BACKUP_DIR,
+    },
     stop.signal,
   );
 } finally {

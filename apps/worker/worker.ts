@@ -3,18 +3,21 @@ import type { Db } from 'mongodb';
 import { jobs, type JobDoc } from '@epic/db';
 import { logger } from '@epic/schemas/logger';
 import type { Handlers } from './handlers';
+import { scheduleBackups } from './handlers/export';
 
 export const MAX_ATTEMPTS = 3;
 export const LOCK_MS = 5 * 60_000;
 const PERMANENT = new Set(['AiOutputError', 'Invalid', 'NotFound', 'Forbidden']);
 const BACKOFF_BASE_MS = 30_000;
 const HEARTBEAT_EVERY_MS = 15_000;
+export const BACKUP_CHECK_EVERY_MS = 10 * 60_000;
 
 export interface WorkerOptions {
   db: Db;
   workerId: string;
   handlers: Handlers;
   keySecret?: string;
+  backupDir?: string;
   pollMs?: number;
 }
 
@@ -49,7 +52,11 @@ export async function tick(opts: WorkerOptions): Promise<JobDoc | null> {
   }
 
   try {
-    const output = await handler(job, { db, keySecret: opts.keySecret ?? '' });
+    const output = await handler(job, {
+      db,
+      keySecret: opts.keySecret ?? '',
+      backupDir: opts.backupDir,
+    });
     const cost = typeof output.costMicros === 'number' ? output.costMicros : 0;
     await jobs.complete(db, job._id, workerId, output, cost);
     logger.info('job done', { jobId: job._id.toHexString(), type: job.type });
@@ -80,10 +87,21 @@ export async function tick(opts: WorkerOptions): Promise<JobDoc | null> {
 export async function runLoop(opts: WorkerOptions, signal: AbortSignal): Promise<void> {
   const pollMs = opts.pollMs ?? 1_000;
   let lastBeat = 0;
+  let lastBackupCheck = 0;
+  if (!opts.backupDir) logger.info('nightly backups off: set BACKUP_DIR to turn them on');
   while (!signal.aborted) {
     if (Date.now() - lastBeat >= HEARTBEAT_EVERY_MS) {
       await jobs.heartbeat(opts.db, opts.workerId);
       lastBeat = Date.now();
+    }
+    if (opts.backupDir && Date.now() - lastBackupCheck >= BACKUP_CHECK_EVERY_MS) {
+      lastBackupCheck = Date.now();
+      // A failed check must not stop the job loop; the next check tries again.
+      await scheduleBackups(opts.db).catch((err: unknown) =>
+        logger.error('backup scheduling failed', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
     const job = await tick(opts);
     if (!job) await sleep(pollMs, undefined, { signal }).catch(() => undefined);

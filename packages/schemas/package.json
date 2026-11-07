@@ -12,7 +12,9 @@
     "./storylines": "./storylines.ts",
     "./ai-ask": "./ai-ask.ts",
     "./proposals": "./proposals.ts",
-    "./continuity": "./continuity.ts"
+    "./continuity": "./continuity.ts",
+    "./io": "./io.ts",
+    "./import": "./import.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

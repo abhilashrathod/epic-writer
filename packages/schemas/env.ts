@@ -15,6 +15,14 @@ export const mongoEnvSchema = z.object({
 export const workerEnvSchema = mongoEnvSchema.extend({
   KEY_ENCRYPTION_SECRET: base64Key32,
   WORKER_ID: z.string().min(1),
+  // Optional: nightly backups are skipped when unset. Blank counts as unset.
+  BACKUP_DIR: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .refine((v) => /^(\/|[A-Za-z]:[\\/])/.test(v), 'must be an absolute path')
+      .optional(),
+  ),
 });
 
 export const webEnvSchema = mongoEnvSchema.extend({
