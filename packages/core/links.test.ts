@@ -153,6 +153,7 @@ describe('entityRelations', () => {
         sceneKey: 's1',
         heading: 'EXT. WALLS - DAY',
         order: '0001.0001',
+        first: true,
       },
     ]);
   });

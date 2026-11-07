@@ -23,9 +23,10 @@ export function readHeads<C extends VersionedCollection>(
   collection: C,
   scope: BranchScope,
   filter: Record<string, unknown> = {},
+  opts: { session?: ClientSession } = {},
 ): Promise<Doc<C>[]> {
   const q = where({ ...filter, ...scope, isHead: true, deleted: false });
-  return vcol(db, collection).find(q).toArray() as unknown as Promise<Doc<C>[]>;
+  return vcol(db, collection).find(q, opts).toArray() as unknown as Promise<Doc<C>[]>;
 }
 
 /** Current version of one key, or null if missing. Tombstones count as missing unless asked for. */
@@ -60,4 +61,19 @@ export function readAtSeq<C extends VersionedCollection>(
     deleted: false,
   });
   return vcol(db, collection).find(q).toArray() as unknown as Promise<Doc<C>[]>;
+}
+
+/**
+ * Every version commit `seq` touched: the rows it wrote (`seq`) and the heads it closed
+ * (`supersededSeq`). Rare, on-demand reads (history, undo), so no dedicated index.
+ */
+export function readCommitVersions<C extends VersionedCollection>(
+  db: Db,
+  collection: C,
+  scope: BranchScope,
+  seq: number,
+  opts: { session?: ClientSession } = {},
+): Promise<Doc<C>[]> {
+  const q = where({ ...scope, $or: [{ seq }, { supersededSeq: seq }] });
+  return vcol(db, collection).find(q, opts).toArray() as unknown as Promise<Doc<C>[]>;
 }

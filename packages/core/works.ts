@@ -16,6 +16,7 @@ import {
 import { commit, commitInSession, versionBody, type Change } from './commit';
 import { emptyOverview, emptyVisual } from './defaults';
 import { Invalid, NotFound } from './errors';
+import type { DocumentDetails } from '@epic/schemas/api';
 
 /** Who is acting, in which project and on which branch. */
 export interface ProjectContext {
@@ -259,6 +260,50 @@ export async function setDocumentStoryTime(
     changes: [
       { op: 'update', collection: 'documents', key, data: { ...versionBody(doc), storyTime } },
     ],
+  });
+}
+
+/**
+ * Sets an episode's or chapter's logline, summary and key events, or a container's arc summary
+ * (WK-5). Key events must be live entries whose type has the `event` trait.
+ */
+export async function setDocumentDetails(
+  db: Db,
+  ctx: ProjectContext,
+  key: string,
+  details: DocumentDetails,
+): Promise<void> {
+  const doc = await requireDocument(db, ctx, key);
+  const allowed =
+    doc.kind === 'container' ? ['arcSummary'] : ['logline', 'summary', 'keyEventKeys'];
+  const wrong = Object.keys(details).filter((k) => !allowed.includes(k));
+  if (wrong.length) throw new Invalid(`"${doc.title}" has no ${wrong.join(', ')}`);
+
+  if (details.keyEventKeys?.length) {
+    const keys = [...new Set(details.keyEventKeys)];
+    details = { ...details, keyEventKeys: keys };
+    const [found, types] = await Promise.all([
+      readHeads(db, 'entities', ctx.scope, { key: { $in: keys } }),
+      readHeads(db, 'entityTypes', ctx.scope),
+    ]);
+    const events = new Set(types.filter((t) => t.traits.includes('event')).map((t) => t.key));
+    const ok = new Set(
+      found.filter((e) => events.has(e.typeKey) && e.canonState !== 'scrapped').map((e) => e.key),
+    );
+    if (keys.some((k) => !ok.has(k)))
+      throw new Invalid('Key events must be existing, unscrapped entries of an event type');
+  }
+
+  const next = { ...versionBody(doc), ...details };
+  const same = (Object.keys(details) as (keyof DocumentDetails)[]).every(
+    (k) => JSON.stringify(next[k]) === JSON.stringify(doc[k]),
+  );
+  if (same) return;
+  await commit(db, {
+    ...ctx.scope,
+    message: `Edit details of "${doc.title}"`,
+    author: author(ctx),
+    changes: [{ op: 'update', collection: 'documents', key, data: next }],
   });
 }
 

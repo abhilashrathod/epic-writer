@@ -189,6 +189,19 @@ export const commits = {
   },
   list: (db: Db, projectId: ObjectId, branchId: ObjectId) =>
     col(db, 'commits').find({ projectId, branchId }).sort({ seq: 1 }).toArray(),
+  /** Newest first, `limit` commits older than `before` (all when unset). */
+  page: (db: Db, p: Scope & { before?: number; limit: number }) =>
+    col(db, 'commits')
+      .find({
+        projectId: p.projectId,
+        branchId: p.branchId,
+        ...(p.before !== undefined && { seq: { $lt: p.before } }),
+      })
+      .sort({ seq: -1 })
+      .limit(p.limit)
+      .toArray(),
+  find: (db: Db, p: Scope & { seq: number }, opts: Opts = {}) =>
+    col(db, 'commits').findOne(p, opts),
   /** Commit counts keyed by project id string. */
   async countByProject(db: Db, projectIds: ObjectId[]): Promise<Map<string, number>> {
     const rows = await col(db, 'commits')
@@ -274,14 +287,21 @@ export const documentVersions = {
     ),
 
   /** Working copies whose text contains `needle` (e.g. a mention marker). */
-  findWorkingContaining: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; needle: string }) =>
+  findWorkingContaining: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; needle: string },
+    opts: Opts = {},
+  ) =>
     col(db, 'documentVersions')
-      .find({
-        projectId: p.projectId,
-        branchId: p.branchId,
-        kind: 'working',
-        text: { $regex: p.needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') },
-      })
+      .find(
+        {
+          projectId: p.projectId,
+          branchId: p.branchId,
+          kind: 'working',
+          text: { $regex: p.needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') },
+        },
+        opts,
+      )
       .toArray(),
 
   /** Snapshots newest first, without their text. */

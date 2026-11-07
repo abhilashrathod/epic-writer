@@ -24,8 +24,8 @@
 //                        in the same sentence of action or prose (warning), or the cue's speaker
 //                        when the item is named in dialogue (info). Items without a holder pass.
 //   knowledge-leak       "Name used too early": the entry's first appearance in this work (from
-//                        `firstAppearances`) comes after this scene, so naming it here gives it
-//                        away early (warning).
+//                        `firstAppearances`, recorded on save from mentions outside dialogue)
+//                        comes after this scene, so naming it here gives it away early (warning).
 
 import type { ContinuityRule, TextRange } from '@epic/db';
 import {
@@ -258,7 +258,7 @@ export function checkContinuityRules(doc: RuleDocument, world: RuleWorld): Found
           range,
           rule: 'knowledge-leak',
           severity: 'warning',
-          message: `${e.name} is named before their first appearance later in this work, which gives them away early. Cut or rename the mention, or move their first appearance in the codex to this scene.`,
+          message: `${e.name} is named before their first appearance later in this work, which gives them away early. Cut or rename the mention, or have them appear in an earlier scene.`,
           relatedKeys: [e.key],
         });
       }

@@ -164,6 +164,7 @@ export async function entityRelations(
     sceneKey: s.sceneKey,
     heading: s.heading,
     order: s.order,
+    first: entity.firstAppearances.some((r) => r.sceneKey === s.sceneKey),
   }));
   return { connections, referencedBy, appearances };
 }

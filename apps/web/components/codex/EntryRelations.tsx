@@ -291,6 +291,7 @@ export function EntryRelations(props: {
                   <span className="text-muted">{a.documentTitle} ·</span>{' '}
                   {a.heading || 'Untitled scene'}
                 </Link>
+                {a.first && <span className="text-muted"> · first appearance</span>}
               </li>
             ))}
           </ol>

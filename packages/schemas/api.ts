@@ -67,7 +67,19 @@ export const updateDocumentBody = z.union([
   z.object({ title: z.string().trim().min(1, 'Title is empty').max(200) }),
   z.object({ move: z.enum(['up', 'down']) }),
   z.object({ storyTime: storyTimeSchema.nullable() }),
+  z.object({ details: z.lazy(() => documentDetailsSchema) }),
 ]);
+
+/** WK-5: episodes and chapters have a logline, summary and key events; containers an arc summary. */
+export const documentDetailsSchema = z
+  .object({
+    logline: z.string().trim().max(500),
+    summary: z.string().trim().max(20_000),
+    keyEventKeys: z.array(z.string().min(1)).max(100),
+    arcSummary: z.string().trim().max(20_000),
+  })
+  .partial();
+export type DocumentDetails = z.infer<typeof documentDetailsSchema>;
 
 export interface WorkDto {
   key: string;
@@ -88,6 +100,10 @@ export interface DocumentDto {
   orderPath: string;
   /** When the episode or chapter happens in story time; opening it moves "as of" here (WK-7). */
   storyTime: z.infer<typeof storyTimeSchema> | null;
+  logline: string;
+  summary: string;
+  arcSummary: string;
+  keyEventKeys: string[];
 }
 
 export interface TreeDto {
@@ -299,6 +315,8 @@ export interface RelationsDto {
     sceneKey: string;
     heading: string;
     order: string;
+    /** The entry's first appearance in this scene's work (CX-5). */
+    first: boolean;
   }[];
 }
 
@@ -394,3 +412,11 @@ export interface JobDto {
   costMicros: number;
   error: string | null;
 }
+
+// ---------- commit history (BR-2) ----------
+
+export const commitSeqParam = z.coerce.number().int().positive();
+export const commitsQuery = z.object({
+  before: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});

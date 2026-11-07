@@ -37,6 +37,7 @@ export function ProjectShell({
             ['graph', 'Family trees and web'],
             ['timeline', 'Timeline'],
             ['storylines', 'Storylines'],
+            ['guide', 'Episode guide'],
             ['ask', 'Ask the codex'],
             ['import', 'Import notes'],
             ['settings', 'AI settings'],

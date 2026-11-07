@@ -44,6 +44,10 @@ export const toDocumentDto = (d: DocumentDoc): DocumentDto => ({
   number: d.number,
   orderPath: d.orderPath,
   storyTime: d.storyTime,
+  logline: d.logline,
+  summary: d.summary,
+  arcSummary: d.arcSummary,
+  keyEventKeys: d.keyEventKeys,
 });
 
 export const toVersionDto = (v: VersionSummary): VersionDto => ({

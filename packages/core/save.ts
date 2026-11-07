@@ -11,6 +11,7 @@ import {
 } from '@epic/db';
 import { classifyLines, extractScenes, findMarkers, textStats } from '@epic/fountain';
 import { markStaleOnSave } from './continuity';
+import { updateFirstAppearances } from './first-appearances';
 import { Conflict, Invalid, NotFound } from './errors';
 import type { ProjectContext } from './works';
 
@@ -121,6 +122,7 @@ export async function saveWorkingText(
         });
       }
       await scenes.replaceForDocument(db, where, deriveScenes(ctx, doc, input.text), { session });
+      await updateFirstAppearances(db, session, ctx, doc, input.text);
       if (before) await markStaleOnSave(db, issues, before.text, input.text, { session });
 
       const last = await documentVersions.latestSnapshot(db, where, { session });

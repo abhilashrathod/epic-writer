@@ -16,6 +16,8 @@ import { Forbidden, Invalid, NotFound, Conflict } from './errors';
 export type Change =
   | { op: 'create'; collection: VersionedCollection; key?: string; data: object }
   | { op: 'update'; collection: VersionedCollection; key: string; data: object }
+  /** Brings a deleted key back with `data` (undo of a delete). */
+  | { op: 'restore'; collection: VersionedCollection; key: string; data: object }
   | { op: 'delete'; collection: VersionedCollection; key: string };
 
 export interface CommitInput {
@@ -97,14 +99,20 @@ export async function commitInSession(
       body = change.data;
     } else {
       key = change.key;
-      const head = await readHeadByKey(db, change.collection, scope, key, { session });
+      const restore = change.op === 'restore';
+      const head = await readHeadByKey(db, change.collection, scope, key, {
+        session,
+        includeDeleted: restore,
+      });
       if (!head) throw new NotFound(`${change.collection} key ${key} not found`);
+      if (restore && !head.deleted)
+        throw new Conflict(`${change.collection} key ${key} is not deleted`);
       await coll.updateOne(
         { _id: head._id, isHead: true },
         { $set: { isHead: false, supersededSeq: seq } },
         { session },
       );
-      body = change.op === 'update' ? change.data : versionBody(head);
+      body = change.op === 'delete' ? versionBody(head) : change.data;
     }
 
     await coll.insertOne(
