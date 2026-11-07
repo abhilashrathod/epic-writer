@@ -155,6 +155,7 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 ## How to work in this repo
 
 - Keep changes small and focused. One concern per commit, with a conventional message (`feat(core): ...`, `fix(editor): ...`).
+- **Stage, don't commit.** Agents only `git add` their changes. Never `git commit` or `git push` until the user explicitly says so; they review staged changes first. Suggest a conventional commit message when handing over.
 - Read before you write: check `docs/data-model.md` and existing patterns before adding a collection field, route or component.
 - **Ask before:** changing the schema or the versioned envelope, adding a dependency outside the stack table, changing a rule in this file, or deleting user data in a migration.
 - When something is ambiguous, pick the option most consistent with this file and say which you picked.
