@@ -12,21 +12,41 @@ export interface CardEntry {
   tags: string[];
 }
 
-/** One entry as a card: shared by the grid, the detail header and the live form preview. */
+export interface Life {
+  status: 'unborn' | 'alive' | 'dead';
+  age: number | null;
+}
+
+const lifeText = ({ status, age }: Life) =>
+  status === 'unborn'
+    ? 'unborn'
+    : status === 'dead'
+      ? age === null
+        ? 'dead'
+        : `Died at ${age}`
+      : age === null
+        ? null
+        : `Age ${age}`;
+
+/**
+ * One entry as a card: shared by the grid, the detail header and the live form preview. `life` is
+ * the age and life status of a `born` entry as of the current point (GR-6); unborn entries fade.
+ */
 export function EntryCard({
   entry,
   type,
   selected = false,
+  life,
 }: {
   entry: CardEntry;
   type: EntityTypeDto | undefined;
   selected?: boolean;
+  life?: Life;
 }) {
+  const fade = entry.canonState === 'scrapped' || life?.status === 'unborn';
+  const lifeLine = life && lifeText(life);
   return (
-    <Card
-      selected={selected}
-      className={`flex h-full flex-col gap-2 ${entry.canonState === 'scrapped' ? 'opacity-60' : ''}`}
-    >
+    <Card selected={selected} className={`flex h-full flex-col gap-2 ${fade ? 'opacity-60' : ''}`}>
       <div className="flex items-center gap-2 text-sm">
         <Icon
           name={type?.icon ?? 'circle'}
@@ -46,6 +66,9 @@ export function EntryCard({
       <p className={`font-semibold leading-tight ${entry.prominence === 'main' ? 'text-lg' : ''}`}>
         {entry.name || 'Untitled'}
       </p>
+      {lifeLine && (
+        <p className={`text-xs ${selected ? 'opacity-80' : 'text-muted'}`}>{lifeLine}</p>
+      )}
       {entry.aliases.length > 0 && (
         <p className={`text-xs ${selected ? 'opacity-80' : 'text-muted'}`}>
           also {entry.aliases.join(', ')}

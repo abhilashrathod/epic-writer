@@ -1,4 +1,4 @@
-import { deleteDocument, moveDocument, renameDocument } from '@epic/core';
+import { deleteDocument, moveDocument, renameDocument, setDocumentStoryTime } from '@epic/core';
 import { updateDocumentBody } from '@epic/schemas/api';
 import { handle, parseBody, requireUser } from '../../../../../../lib/http';
 import { projectFor } from '../../../../../../lib/project';
@@ -12,7 +12,8 @@ export function PATCH(req: Request, { params }: Ctx) {
     const ctx = await projectFor(projectId, await requireUser());
     const body = await parseBody(req, updateDocumentBody);
     if ('title' in body) await renameDocument(getAppDb(), ctx, key, body.title);
-    else await moveDocument(getAppDb(), ctx, key, body.move);
+    else if ('move' in body) await moveDocument(getAppDb(), ctx, key, body.move);
+    else await setDocumentStoryTime(getAppDb(), ctx, key, body.storyTime);
     return new Response(null, { status: 204 });
   });
 }

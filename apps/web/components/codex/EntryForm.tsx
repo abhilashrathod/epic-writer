@@ -6,6 +6,7 @@ import { CANON_STATES, PROMINENCE, type EntityDto, type EntityInput } from '@epi
 import { Button, Field, focusRing } from '@epic/ui';
 import { api } from '../../lib/api-client';
 import { entitiesKey, type TypesData } from '../../lib/use-types';
+import { worldKey } from '../../lib/use-world';
 import { EntryCard } from './EntryCard';
 import { FieldInput } from './FieldInput';
 
@@ -56,7 +57,10 @@ export function EntryForm(props: {
         : api<{ key: string }>(base, { method: 'POST', body }).then((r) => r.key);
     },
     onSuccess: async (key) => {
-      await qc.invalidateQueries({ queryKey: entitiesKey(props.projectId) });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: entitiesKey(props.projectId) }),
+        qc.invalidateQueries({ queryKey: worldKey(props.projectId) }),
+      ]);
       props.onDone(key);
     },
   });

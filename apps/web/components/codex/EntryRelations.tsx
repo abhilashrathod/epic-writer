@@ -6,9 +6,13 @@ import { useState, type FormEvent } from 'react';
 import type { EntityDto, LinkTypeDto, RelationsDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import { api } from '../../lib/api-client';
-import { relationsKey, useLinkTypes } from '../../lib/use-types';
+import type { StoryTimeShape } from '@epic/core/calendar';
+import { useTree } from '../../lib/use-tree';
+import { relationsKey, useLinkTypes, useTypes } from '../../lib/use-types';
+import { worldKey } from '../../lib/use-world';
+import { StoryDateInput } from './StoryDateInput';
 
-const KIND_TITLE: Record<string, string> = {
+export const KIND_TITLE: Record<string, string> = {
   kinship: 'Family',
   membership: 'Membership',
   relation: 'Relations',
@@ -59,6 +63,10 @@ export function EntryRelations(props: {
   const [choice, setChoice] = useState('');
   const [other, setOther] = useState('');
   const [note, setNote] = useState('');
+  const [since, setSince] = useState<StoryTimeShape | null>(null);
+  const [revealedIn, setRevealedIn] = useState('');
+  const calendar = useTypes(projectId).data?.calendar ?? null;
+  const textDocs = (useTree(projectId).data?.documents ?? []).filter((d) => d.kind === 'text');
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['relations', projectId] });
   const remove = useMutation({
@@ -72,14 +80,31 @@ export function EntryRelations(props: {
       const [fromKey, toKey] = picked!.outgoing ? [entry.key, other] : [other, entry.key];
       return api(`${base}/links`, {
         method: 'POST',
-        body: { typeKey: picked!.type.key, fromKey, toKey, note },
+        body: {
+          typeKey: picked!.type.key,
+          fromKey,
+          toKey,
+          note,
+          storyTime: since,
+          // Revealed at the start of the chosen episode; until then views keep it hidden.
+          narrativeRefs: textDocs
+            .filter((d) => d.key === revealedIn)
+            .map((d) => ({
+              workKey: d.workKey,
+              documentKey: d.key,
+              sceneKey: '',
+              order: d.orderPath,
+            })),
+        },
       });
     },
     onSuccess: async () => {
       setOther('');
       setNote('');
+      setSince(null);
+      setRevealedIn('');
       setAdding(false);
-      await refresh();
+      await Promise.all([refresh(), qc.invalidateQueries({ queryKey: worldKey(projectId) })]);
     },
   });
 
@@ -197,6 +222,30 @@ export function EntryRelations(props: {
               onChange={(e) => setNote(e.target.value)}
               maxLength={1000}
             />
+            {calendar && (
+              <StoryDateInput
+                label="Since (optional)"
+                calendar={calendar}
+                value={since}
+                onChange={setSince}
+              />
+            )}
+            <label className="flex flex-col gap-1.5 font-medium">
+              Revealed in (optional)
+              <select
+                aria-label="Revealed in"
+                className={`${select} font-normal`}
+                value={revealedIn}
+                onChange={(e) => setRevealedIn(e.target.value)}
+              >
+                <option value="">Known from the start</option>
+                {textDocs.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.title}
+                  </option>
+                ))}
+              </select>
+            </label>
             {add.error && <p className="text-bad">{add.error.message}</p>}
             <div className="flex gap-2">
               <Button type="submit" variant="primary" disabled={!picked || !other || add.isPending}>

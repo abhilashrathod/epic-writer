@@ -10,3 +10,6 @@ export * from './entity-types';
 export * from './templates';
 export * from './entities';
 export * from './links';
+export * from './asof';
+export * from './facts';
+export * from './storylines';

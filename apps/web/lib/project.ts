@@ -1,7 +1,23 @@
 import { ObjectId } from 'mongodb';
 import { NotFound, openProject, type ProjectContext, type VersionSummary } from '@epic/core';
-import type { DocumentDoc, EntityDoc, EntityTypeDoc, UserDoc, WorkDoc } from '@epic/db';
-import type { DocumentDto, EntityDto, EntityTypeDto, VersionDto, WorkDto } from '@epic/schemas/api';
+import type {
+  DocumentDoc,
+  EntityDoc,
+  EntityTypeDoc,
+  FactDoc,
+  LinkDoc,
+  UserDoc,
+  WorkDoc,
+} from '@epic/db';
+import type {
+  DocumentDto,
+  EntityDto,
+  EntityTypeDto,
+  FactDto,
+  LinkDto,
+  VersionDto,
+  WorkDto,
+} from '@epic/schemas/api';
 import { getAppDb } from './server';
 
 /** Resolves a project id from the URL for this user; malformed and foreign ids are both NotFound. */
@@ -27,6 +43,7 @@ export const toDocumentDto = (d: DocumentDoc): DocumentDto => ({
   title: d.title,
   number: d.number,
   orderPath: d.orderPath,
+  storyTime: d.storyTime,
 });
 
 export const toVersionDto = (v: VersionSummary): VersionDto => ({
@@ -59,4 +76,27 @@ export const toEntityDto = (e: EntityDoc): EntityDto => ({
   tags: e.tags,
   fields: e.fields,
   updatedAt: e.createdAt.toISOString(),
+});
+
+export const toLinkDto = (l: LinkDoc): LinkDto => ({
+  key: l.key,
+  typeKey: l.typeKey,
+  kind: l.kind,
+  fromKey: l.fromKey,
+  toKey: l.toKey,
+  storyTime: l.storyTime,
+  narrativeRefs: l.narrativeRefs,
+  canonState: l.canonState,
+  note: l.note,
+});
+
+export const toFactDto = (f: FactDoc): FactDto => ({
+  key: f.key,
+  entityKey: f.entityKey,
+  field: f.field,
+  value: f.value,
+  storyTime: f.storyTime,
+  narrativeRefs: f.narrativeRefs,
+  causeKey: f.causeKey,
+  canonState: f.canonState,
 });

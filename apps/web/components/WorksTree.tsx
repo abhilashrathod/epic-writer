@@ -4,11 +4,13 @@ import * as Menu from '@radix-ui/react-dropdown-menu';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import type { StoryTimeShape } from '@epic/core/calendar';
 import type { DocumentDto, WorkDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import { api } from '../lib/api-client';
 import { useTree, useTreeMutation } from '../lib/use-tree';
-import { useEntities } from '../lib/use-types';
+import { useEntities, useTypes } from '../lib/use-types';
+import { StoryDateInput } from './codex/StoryDateInput';
 import { NewWorkForm } from './NewWorkForm';
 import { useWorkspace } from './Workspace';
 
@@ -105,11 +107,13 @@ function DocNode(props: {
   onNavigate: () => void;
 }) {
   const { doc, work, all } = props;
-  const { projectId, scenes, jumpTo } = useWorkspace();
+  const { projectId, scenes, jumpTo, asOfPinned, setAsOf } = useWorkspace();
   const entities = useEntities(projectId);
+  const calendar = useTypes(projectId).data?.calendar ?? null;
+  const [when, setWhen] = useState<StoryTimeShape | null>(doc.storyTime);
   const names = new Map((entities.data ?? []).map((e) => [e.key, e.name]));
   const params = useParams<{ documentKey?: string }>();
-  const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete'>('view');
+  const [mode, setMode] = useState<'view' | 'rename' | 'time' | 'confirmDelete'>('view');
   const [title, setTitle] = useState(doc.title);
   const url = `/api/projects/${projectId}/documents/${doc.key}`;
   const patch = useTreeMutation(projectId, (body: object) => api(url, { method: 'PATCH', body }));
@@ -122,6 +126,25 @@ function DocNode(props: {
   function rename(e: FormEvent) {
     e.preventDefault();
     patch.mutate({ title }, { onSuccess: () => setMode('view') });
+  }
+
+  function saveTime(e: FormEvent) {
+    e.preventDefault();
+    patch.mutate(
+      { storyTime: when },
+      {
+        onSuccess: () => {
+          setMode('view');
+          // The open episode's point moved, so "as of" follows it (WK-7).
+          if (open && !asOfPinned)
+            setAsOf({
+              storyTime: when?.start ?? null,
+              workKey: doc.workKey,
+              order: `${doc.orderPath}.9999`,
+            });
+        },
+      },
+    );
   }
 
   return (
@@ -180,6 +203,17 @@ function DocNode(props: {
                 <Menu.Item className={menuItem} onSelect={() => setMode('rename')}>
                   Rename
                 </Menu.Item>
+                {doc.kind === 'text' && calendar && (
+                  <Menu.Item
+                    className={menuItem}
+                    onSelect={() => {
+                      setWhen(doc.storyTime);
+                      setMode('time');
+                    }}
+                  >
+                    Set story time…
+                  </Menu.Item>
+                )}
                 <Menu.Item className={menuItem} onSelect={() => patch.mutate({ move: 'up' })}>
                   Move up
                 </Menu.Item>
@@ -198,6 +232,28 @@ function DocNode(props: {
         </div>
       )}
 
+      {mode === 'time' && calendar && (
+        <form
+          onSubmit={saveTime}
+          aria-label={`Story time of ${doc.title}`}
+          className="my-1 flex flex-col gap-2 rounded-lg bg-surface p-2"
+        >
+          <StoryDateInput
+            label={`When ${doc.title} happens`}
+            calendar={calendar}
+            value={when}
+            onChange={setWhen}
+          />
+          <div className="flex gap-2">
+            <Button type="submit" className="h-7" disabled={patch.isPending}>
+              Save story time
+            </Button>
+            <Button onClick={() => setMode('view')} className="h-7">
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
       {mode === 'confirmDelete' && (
         <div role="alert" className="my-1 flex flex-col gap-2 rounded-lg bg-bad-soft p-2 text-sm">
           <span>

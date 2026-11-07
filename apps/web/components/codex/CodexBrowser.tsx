@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
+import { lifeAt } from '@epic/core/asof';
+import type { EntityDto } from '@epic/schemas/api';
 import { Button, Icon, TYPE_TEXT, focusRing } from '@epic/ui';
 import { useEntities, useTypes } from '../../lib/use-types';
 import { useWorkspace } from '../Workspace';
@@ -15,7 +17,7 @@ import { EntryForm } from './EntryForm';
  * date), and a detail pane. `?type=` filters and `?e=` opens an entry, so links can point anywhere.
  */
 export function CodexBrowser() {
-  const { projectId } = useWorkspace();
+  const { projectId, asOf } = useWorkspace();
   const meta = useTypes(projectId);
   const entities = useEntities(projectId);
   const params = useSearchParams();
@@ -60,6 +62,12 @@ export function CodexBrowser() {
     );
   const types = meta.data!.types;
   const open = all.find((e) => e.key === openKey) ?? null;
+  const lifeOf = (e: EntityDto) => {
+    const t = types.find((x) => x.key === e.typeKey);
+    return t?.traits.includes('born')
+      ? lifeAt(meta.data!.calendar, t.fields, e.fields, asOf.storyTime)
+      : undefined;
+  };
   const counts = new Map<string, number>();
   for (const e of all)
     if (e.canonState !== 'scrapped') counts.set(e.typeKey, (counts.get(e.typeKey) ?? 0) + 1);
@@ -175,6 +183,7 @@ export function CodexBrowser() {
                     entry={e}
                     type={types.find((t) => t.key === e.typeKey)}
                     selected={openKey === e.key}
+                    life={lifeOf(e)}
                   />
                 </button>
               </li>

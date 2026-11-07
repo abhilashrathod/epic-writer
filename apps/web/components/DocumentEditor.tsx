@@ -53,7 +53,18 @@ export function DocumentEditor({
 
 function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: string }) {
   const { projectId, setScenes, setJumpHandler, focus, setFocus, scenes, jumpTo } = useWorkspace();
+  const { asOfPinned, setAsOf } = useWorkspace();
   const { document, text } = data;
+  // WK-7: opening an episode moves "as of" to its point in the story, unless pinned.
+  const docStart = document.storyTime?.start ?? null;
+  useEffect(() => {
+    if (!asOfPinned)
+      setAsOf({
+        storyTime: docStart,
+        workKey: document.workKey,
+        order: `${document.orderPath}.9999`,
+      });
+  }, [asOfPinned, setAsOf, docStart, document.workKey, document.orderPath]);
   const base = `/api/projects/${projectId}/documents/${document.key}`;
   const sync = useDocumentSync({
     projectId,

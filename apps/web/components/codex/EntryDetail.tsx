@@ -1,11 +1,15 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { formatPoint, lifeAt, resolveFields } from '@epic/core/asof';
 import type { EntityDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import { api } from '../../lib/api-client';
 import { entitiesKey, type TypesData } from '../../lib/use-types';
+import { worldKey, useWorld } from '../../lib/use-world';
+import { useWorkspace } from '../Workspace';
+import { EntryChanges } from './EntryChanges';
 import { EntryCard } from './EntryCard';
 import { EntryRelations } from './EntryRelations';
 import { FieldValue } from './FieldValue';
@@ -27,7 +31,28 @@ export function EntryDetail(props: {
   const [mode, setMode] = useState<'view' | 'merge' | 'delete'>('view');
   const [mergeKey, setMergeKey] = useState('');
   const type = props.meta.types.find((t) => t.key === entry.typeKey);
-  const refresh = () => qc.invalidateQueries({ queryKey: entitiesKey(props.projectId) });
+  const refresh = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: entitiesKey(props.projectId) }),
+      qc.invalidateQueries({ queryKey: worldKey(props.projectId) }),
+    ]);
+  const { asOf } = useWorkspace();
+  const world = useWorld(props.projectId);
+  const facts = useMemo(
+    () =>
+      (world.data?.facts ?? [])
+        .filter((f) => f.entityKey === entry.key)
+        .sort((a, b) => a.storyTime.start - b.storyTime.start),
+    [world.data, entry.key],
+  );
+  // Time-varying fields show their value at the current point (CX-3, GR-5).
+  const values = resolveFields(entry.fields, facts, asOf);
+  const cal = props.meta.calendar;
+  const asOfLabel =
+    asOf.storyTime !== null && cal ? `as of ${formatPoint(cal, asOf.storyTime)}` : null;
+  const life = type?.traits.includes('born')
+    ? lifeAt(cal, type.fields, values, asOf.storyTime)
+    : undefined;
   const base = `/api/projects/${props.projectId}/entities`;
 
   const remove = useMutation({
@@ -50,12 +75,12 @@ export function EntryDetail(props: {
     },
   });
 
-  const shown = (type?.fields ?? []).filter((f) => !isEmpty(entry.fields[f.key]));
+  const shown = (type?.fields ?? []).filter((f) => !isEmpty(values[f.key]));
   const duplicates = props.entries.filter((e) => e.key !== entry.key);
 
   return (
     <article aria-label={entry.name} className="flex flex-col gap-4">
-      <EntryCard entry={entry} type={type} />
+      <EntryCard entry={entry} type={type} life={life} />
       <div className="flex flex-wrap gap-1">
         <Button onClick={props.onEdit}>Edit</Button>
         <Button
@@ -128,11 +153,16 @@ export function EntryDetail(props: {
         <dd>{entry.prominence}</dd>
         {shown.map((f) => (
           <div key={f.key} className="contents">
-            <dt className="text-muted">{f.label}</dt>
+            <dt className="text-muted">
+              {f.label}
+              {f.timeVarying && asOfLabel && (
+                <span className="block text-xs text-faint">{asOfLabel}</span>
+              )}
+            </dt>
             <dd>
               <FieldValue
                 field={f}
-                value={entry.fields[f.key]}
+                value={values[f.key]}
                 calendar={props.meta.calendar}
                 units={props.meta.units}
                 entries={props.entries}
@@ -142,6 +172,17 @@ export function EntryDetail(props: {
           </div>
         ))}
       </dl>
+      {type && (
+        <EntryChanges
+          projectId={props.projectId}
+          entry={entry}
+          type={type}
+          meta={props.meta}
+          entries={props.entries}
+          facts={facts}
+          onOpen={props.onOpen}
+        />
+      )}
       <EntryRelations
         projectId={props.projectId}
         entry={entry}

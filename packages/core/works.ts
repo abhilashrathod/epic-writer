@@ -240,6 +240,24 @@ export async function renameDocument(
   });
 }
 
+/** Sets when an episode or chapter happens in story time (null clears it). */
+export async function setDocumentStoryTime(
+  db: Db,
+  ctx: ProjectContext,
+  key: string,
+  storyTime: DocumentDoc['storyTime'],
+): Promise<void> {
+  const doc = await requireDocument(db, ctx, key);
+  await commit(db, {
+    ...ctx.scope,
+    message: `Set when "${doc.title}" happens`,
+    author: author(ctx),
+    changes: [
+      { op: 'update', collection: 'documents', key, data: { ...versionBody(doc), storyTime } },
+    ],
+  });
+}
+
 /** Swaps a document with its neighbour. Moving past either end does nothing. */
 export async function moveDocument(
   db: Db,

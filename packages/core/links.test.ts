@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ObjectId, type Db } from 'mongodb';
+import { readHeads } from '@epic/db';
 import { createTestDb } from '@epic/db/testing';
 import { createProject } from './create-project';
 import { createEntity } from './entities';
@@ -77,6 +78,22 @@ describe('links', () => {
     await expect(
       createLink(db, ctx, { typeKey: L['parent of'], fromKey: person, toKey: person }),
     ).rejects.toBeInstanceOf(Invalid);
+  });
+
+  it('stores when a connection begins and where it is revealed', async () => {
+    const a = await entry('Character', 'A');
+    const b = await entry('Character', 'B');
+    const storyTime = { start: 3600, end: null, precision: 'year' as const };
+    const ref = { workKey: 'w1', documentKey: 'd1', sceneKey: '', order: '0001.0004' };
+    await createLink(db, ctx, {
+      typeKey: L['parent of'],
+      fromKey: a,
+      toKey: b,
+      storyTime,
+      narrativeRefs: [ref],
+    });
+    const [link] = await readHeads(db, 'links', ctx.scope);
+    expect(link).toMatchObject({ storyTime, narrativeRefs: [ref] });
   });
 
   it('removes a connection', async () => {

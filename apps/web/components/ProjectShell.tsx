@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { Button } from '@epic/ui';
+import { AsOfControl } from './AsOfControl';
 import { WorksTree } from './WorksTree';
 import { useWorkspace } from './Workspace';
 
@@ -30,9 +31,23 @@ export function ProjectShell({
           ← All projects
         </Link>
         <p className="font-semibold tracking-tight">{projectName}</p>
-        <Link href={`/projects/${projectId}/codex`} className="text-sm text-muted hover:text-ink">
-          Codex
-        </Link>
+        <nav aria-label="Project" className="flex flex-col gap-0.5 text-sm">
+          {[
+            ['codex', 'Codex'],
+            ['graph', 'Family trees and web'],
+            ['timeline', 'Timeline'],
+            ['storylines', 'Storylines'],
+          ].map(([path, label]) => (
+            <Link
+              key={path}
+              href={`/projects/${projectId}/${path}`}
+              className="text-muted hover:text-ink"
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+        <AsOfControl />
         <WorksTree onNavigate={() => setNavOpen(false)} />
       </aside>
       <main className="min-w-0 flex-1 pb-14 md:pb-0">{children}</main>

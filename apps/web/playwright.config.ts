@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 3100;
+// Overridable so parallel runs (e.g. several worktrees) don't share a port or database.
+const PORT = Number(process.env.E2E_PORT ?? 3100);
+const DB = process.env.E2E_DB ?? 'epic-writer-e2e';
 
 export default defineConfig({
   testDir: './e2e',
@@ -31,7 +33,7 @@ export default defineConfig({
     env: {
       E2E_AUTH_BYPASS: '1',
       MONGODB_URI: process.env.MONGODB_URI ?? 'mongodb://localhost:27018/?replicaSet=rs0',
-      MONGODB_DB: 'epic-writer-e2e',
+      MONGODB_DB: DB,
       AUTH_SECRET: 'e2e-only-placeholder-value-not-used-for-anything',
       AUTH_GITHUB_ID: 'e2e',
       AUTH_GITHUB_SECRET: 'e2e',

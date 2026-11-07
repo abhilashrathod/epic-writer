@@ -138,6 +138,14 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - Never change the React tree around the editor (e.g. returning different wrappers in focus mode); hide chrome with CSS instead. A remount throws away unsaved text.
 - Turbopack's on-disk dev cache is off (`turbopackFileSystemCacheForDev: false` in `apps/web/next.config.ts`): it went stale when code changed between dev runs and made pages reload in a loop ("HMR hash mismatch"). Keep it off. If a loop ever returns, stop `pnpm dev` and `rm -rf apps/web/.next`.
 
+## Time and "as of"
+
+- `@epic/core/asof` (pure, browser-safe) holds the only "as of" rules; every time-aware view uses it. An `AsOf` is `{ storyTime, workKey, order }`; `storyTime: null` means the end of time.
+- A fact or link **has happened** when `storyTime.start <= asOf.storyTime` (untimed or `unknown` precision always has). It is **revealed** when it has no `narrativeRefs` in `asOf.workKey`, or one of them has `order <= asOf.order`. It applies when both hold; otherwise it is "future" (drawn dotted, or hidden for secrets). Scrapped never applies.
+- A field's value as of a point is the latest applying fact for that field, else the entry's stored value (the starting value). Facts only exist for fields marked `timeVarying`.
+- The `born` trait reads birth and death from date fields keyed `born`/`died`, else the type's first and second date fields. Ages come from `ageAt` and the project calendar.
+- Views fetch `GET /api/projects/:id/world` (`useWorld`) and resolve client-side against `useWorkspace().asOf`. Opening an episode moves "as of" to it (its `storyTime`, its work, the end of its `orderPath`) unless pinned (WK-7).
+
 ## Code conventions
 
 - Named exports only, except where Next.js requires a default export.

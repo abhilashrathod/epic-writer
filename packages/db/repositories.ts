@@ -269,21 +269,76 @@ export const documentVersions = {
 
 // ---------- scenes ----------
 
+/** Scene fields the writer sets by hand; a save re-derives everything else. */
+const SCENE_TAGS = ['storylineKeys', 'povEntityKey', 'storyTime', 'locationKey'] as const;
+export type SceneTags = Partial<Pick<SceneDoc, (typeof SCENE_TAGS)[number]>>;
+
 export const scenes = {
-  /** Scenes are derived on save: a document's rows are replaced wholesale. */
+  /**
+   * Scenes are derived on save: a document's rows are replaced wholesale. Hand-set tags carry over
+   * from the previous row with the same sceneKey (scene keys are stable, even across documents).
+   */
   async replaceForDocument(
     db: Db,
     p: { projectId: ObjectId; branchId: ObjectId; documentKey: string },
     rows: Omit<SceneDoc, '_id' | 'createdAt' | 'updatedAt'>[],
     opts: Opts = {},
   ): Promise<void> {
+    const scope = { projectId: p.projectId, branchId: p.branchId };
+    const keys = rows.map((r) => r.sceneKey);
+    // Sorted so this document's own row wins over a same-key row left in another document.
+    const found = await col(db, 'scenes')
+      .find({ ...scope, sceneKey: { $in: keys } }, opts)
+      .toArray();
+    found.sort(
+      (a, b) => Number(a.documentKey === p.documentKey) - Number(b.documentKey === p.documentKey),
+    );
+    const prev = new Map(found.map((s) => [s.sceneKey, s]));
     await col(db, 'scenes').deleteMany(p, opts);
     if (rows.length)
       await col(db, 'scenes').insertMany(
-        rows.map((r) => stamp<SceneDoc>(r)),
+        rows.map((r) => {
+          const old = prev.get(r.sceneKey);
+          const tags = old ? Object.fromEntries(SCENE_TAGS.map((k) => [k, old[k]])) : {};
+          return stamp<SceneDoc>({ ...r, ...tags });
+        }),
         opts,
       );
   },
+  /** Sets hand-made tags on one scene; returns the updated row, or null if there is no such scene. */
+  setTags: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; sceneKey: string },
+    tags: SceneTags,
+  ) =>
+    col(db, 'scenes').findOneAndUpdate(
+      p,
+      { $set: { ...tags, updatedAt: new Date() } },
+      { returnDocument: 'after' },
+    ),
+  /** Untags every scene from a storyline that no longer exists. */
+  removeStoryline: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; storylineKey: string },
+    opts: Opts = {},
+  ) =>
+    col(db, 'scenes').updateMany(
+      { projectId: p.projectId, branchId: p.branchId, storylineKeys: p.storylineKey },
+      { $pull: { storylineKeys: p.storylineKey }, $set: { updatedAt: new Date() } },
+      opts,
+    ),
+  findByKey: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; sceneKey: string }) =>
+    col(db, 'scenes').findOne(p),
+  /** A work's scenes (or the whole project's), in narrative order within each work. */
+  list: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; workKey?: string }) =>
+    col(db, 'scenes')
+      .find({
+        projectId: p.projectId,
+        branchId: p.branchId,
+        ...(p.workKey && { workKey: p.workKey }),
+      })
+      .sort({ workKey: 1, order: 1 })
+      .toArray(),
   /** Scenes that mention an entry, in narrative order. */
   listForEntity: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; entityKey: string }) =>
     col(db, 'scenes')

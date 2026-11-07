@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FIELD_KINDS } from './entity-fields';
+import { FIELD_KINDS, storyTimeSchema } from './entity-fields';
 
 export const TEMPLATE_KEYS = ['blank', 'mythological', 'fantasy', 'space'] as const;
 
@@ -66,6 +66,7 @@ export const createDocumentBody = z.object({
 export const updateDocumentBody = z.union([
   z.object({ title: z.string().trim().min(1, 'Title is empty').max(200) }),
   z.object({ move: z.enum(['up', 'down']) }),
+  z.object({ storyTime: storyTimeSchema.nullable() }),
 ]);
 
 export interface WorkDto {
@@ -85,6 +86,8 @@ export interface DocumentDto {
   title: string;
   number: number;
   orderPath: string;
+  /** When the episode or chapter happens in story time; opening it moves "as of" here (WK-7). */
+  storyTime: z.infer<typeof storyTimeSchema> | null;
 }
 
 export interface TreeDto {
@@ -258,12 +261,23 @@ export interface LinkTypeDto extends z.infer<typeof linkTypeInput> {
   key: string;
 }
 
+export const narrativeRefSchema = z.object({
+  workKey: z.string().min(1),
+  documentKey: z.string().min(1),
+  sceneKey: z.string(),
+  order: z.string().regex(/^\d{4}(\.\d{4})*$/, 'order is a zero-padded path like 0001.0002'),
+});
+
 export const linkInput = z.object({
   typeKey: z.string().min(1, 'Pick a kind of connection'),
   fromKey: z.string().min(1),
   toKey: z.string().min(1, 'Pick who or what to connect to'),
   note: z.string().trim().max(1_000).default(''),
   canonState: z.enum(CANON_STATES).default('canon'),
+  /** When the connection begins in story time; before it, views treat it as future (dotted). */
+  storyTime: storyTimeSchema.nullable().default(null),
+  /** Where each work reveals it; until then it stays hidden (e.g. secret parentage, GR-1). */
+  narrativeRefs: z.array(narrativeRefSchema).max(20).default([]),
 });
 
 /** One connection seen from a given entry: `label` already reads from that entry's side. */
@@ -286,4 +300,45 @@ export interface RelationsDto {
     heading: string;
     order: string;
   }[];
+}
+
+/** A change to a time-varying field (CX-3): from story time `storyTime`, `field` is `value`. */
+export const factInput = z.object({
+  entityKey: z.string().min(1),
+  field: z.string().min(1),
+  value: z.unknown(),
+  storyTime: storyTimeSchema,
+  narrativeRefs: z.array(narrativeRefSchema).max(20).default([]),
+  causeKey: z.string().min(1).nullable().default(null),
+  canonState: z.enum(CANON_STATES).default('canon'),
+});
+
+export interface FactDto {
+  key: string;
+  entityKey: string;
+  field: string;
+  value: unknown;
+  storyTime: z.infer<typeof storyTimeSchema>;
+  narrativeRefs: z.infer<typeof narrativeRefSchema>[];
+  causeKey: string | null;
+  canonState: (typeof CANON_STATES)[number];
+}
+
+export interface LinkDto {
+  key: string;
+  typeKey: string;
+  kind: (typeof LINK_KINDS)[number];
+  fromKey: string;
+  toKey: string;
+  storyTime: z.infer<typeof storyTimeSchema> | null;
+  narrativeRefs: z.infer<typeof narrativeRefSchema>[];
+  canonState: (typeof CANON_STATES)[number];
+  note: string;
+}
+
+/** Everything the time-aware views need, resolved client-side with @epic/core/asof. */
+export interface WorldDto {
+  entities: EntityDto[];
+  links: LinkDto[];
+  facts: FactDto[];
 }
