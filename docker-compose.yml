@@ -1,0 +1,26 @@
+services:
+  mongo:
+    image: mongo:8.0
+    command: ['--replSet', 'rs0', '--bind_ip_all', '--port', '27018']
+    ports:
+      - '27018:27018'
+    volumes:
+      - mongo-data:/data/db
+    # Port 27018, not 27017, so it never collides with a host-installed mongod.
+    # Initiates the replica set on first boot; later runs see it exists and just report ok.
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --port
+        - '27018'
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }).ok }"
+      interval: 5s
+      timeout: 10s
+      start_period: 10s
+      retries: 20
+
+volumes:
+  mongo-data:

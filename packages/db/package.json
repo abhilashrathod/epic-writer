@@ -1,0 +1,19 @@
+{
+  "name": "@epic/db",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./testing": "./testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "db:indexes": "tsx scripts/create-indexes.ts"
+  },
+  "dependencies": {
+    "@epic/schemas": "workspace:*",
+    "mongodb": "^7.8.0",
+    "uuid": "^14.0.3"
+  }
+}

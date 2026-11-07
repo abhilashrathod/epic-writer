@@ -1,0 +1,47 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  secrets:
+    # This repo is public: any secret in any commit fails the build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks
+      - name: Scan full history
+        run: gitleaks git --redact --no-banner -v .
+
+  check:
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: mongodb://localhost:27018/?replicaSet=rs0
+      MONGODB_DB: epic-writer-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # GitHub service containers can't take a command, so the replica set is started by hand.
+      - name: Start MongoDB replica set
+        run: |
+          docker run -d --name mongo-rs -p 27018:27018 mongo:8.0 --replSet rs0 --bind_ip_all --port 27018
+          for i in $(seq 1 30); do
+            docker exec mongo-rs mongosh --port 27018 --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27018' }] }).ok }" && break
+            sleep 2
+          done
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
