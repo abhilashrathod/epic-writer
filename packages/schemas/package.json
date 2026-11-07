@@ -6,7 +6,8 @@
   "exports": {
     ".": "./index.ts",
     "./env": "./env.ts",
-    "./logger": "./logger.ts"
+    "./logger": "./logger.ts",
+    "./api": "./api.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

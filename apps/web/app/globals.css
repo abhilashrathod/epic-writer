@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '../../../packages/ui/tokens.css';
+@import '../../../packages/ui/theme.css';
+
+/* Shared components live outside this app, so Tailwind must scan them explicitly. */
+@source '../../../packages/ui';

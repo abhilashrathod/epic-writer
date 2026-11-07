@@ -10,7 +10,8 @@ export function getMongoClient(uri: string): MongoClient {
   const clients = (globalClients.__epicMongoClients ??= new Map());
   let client = clients.get(uri);
   if (!client) {
-    client = new MongoClient(uri);
+    // Fail fast instead of hanging requests for the 30s default when Mongo is down.
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 5_000 });
     clients.set(uri, client);
   }
   return client;
@@ -22,4 +23,9 @@ export function getDb(uri: string, dbName: string): Db {
 
 export function col<C extends CollectionName>(db: Db, name: C): Collection<CollectionDocs[C]> {
   return db.collection<CollectionDocs[C]>(name);
+}
+
+/** Round-trips to the server; throws if Mongo is unreachable. */
+export async function pingDb(db: Db): Promise<void> {
+  await db.command({ ping: 1 });
 }

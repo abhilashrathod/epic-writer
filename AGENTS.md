@@ -121,6 +121,14 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - **Worker heartbeat** is a `jobs` row with `projectId: SYSTEM_PROJECT_ID` (all-zero ObjectId), `type: 'noop'`, `status: 'done'`, `input: { heartbeat: true, workerId }`; `updatedAt` is the last beat (every 15s). The schema has no status collection, and the row is never `queued`, so it's never claimed. Read it with `jobs.lastHeartbeat(db)`.
 - SIGTERM/SIGINT: the worker finishes the current job, then exits.
 
+## Web app
+
+- Next 16: route protection lives in `apps/web/proxy.ts` (Next renamed `middleware.ts` to `proxy.ts`). It must export a function declaration named `proxy`. Still check the user inside every route handler and server action (`requireUser()`); the proxy alone isn't enough.
+- One `.env` at the repo root serves web and worker; `next.config.ts` loads it.
+- Env is validated lazily (`getEnv()` in `apps/web/lib/server.ts`), so `next build` needs no secrets. Anything that reads the session calls `currentUser()`, which marks the route dynamic.
+- Route handlers wrap their body in `handle()` (`lib/http.ts`), which maps `DomainError`/Zod/401 errors to JSON `{ error }` and hides internals.
+- E2E: Playwright runs `next dev` with `E2E_AUTH_BYPASS=1`, which signs in a fixed test user. It is ignored when `NODE_ENV=production`. Stop `pnpm dev` before `pnpm test:e2e`; both use `apps/web/.next`.
+
 ## Code conventions
 
 - Named exports only, except where Next.js requires a default export.
