@@ -1,12 +1,15 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { EntityTypeDto } from '@epic/schemas/api';
+import type { CalendarShape } from '@epic/core/calendar';
+import type { EntityDto, EntityTypeDto } from '@epic/schemas/api';
 import { api } from './api-client';
 
 export interface TypesData {
   groups: { key: string; name: string; order: number }[];
   types: EntityTypeDto[];
+  units: { key: string; name: string; abbr: string; toBase: number }[];
+  calendar: CalendarShape | null;
 }
 
 export const typesKey = (projectId: string) => ['types', projectId] as const;
@@ -35,4 +38,17 @@ export function fieldKeyFrom(label: string, taken: Set<string>): string {
   let out = key;
   for (let n = 2; taken.has(out); n++) out = `${key}${n}`;
   return out;
+}
+
+export const entitiesKey = (projectId: string) => ['entities', projectId] as const;
+
+/** Every entry including scrapped ones; views filter. Small enough to hold client-side in Phase 1. */
+export function useEntities(projectId: string) {
+  return useQuery({
+    queryKey: entitiesKey(projectId),
+    queryFn: () =>
+      api<{ entities: EntityDto[] }>(`/api/projects/${projectId}/entities?scrapped=1`).then(
+        (r) => r.entities,
+      ),
+  });
 }

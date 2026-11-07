@@ -53,7 +53,16 @@ export interface BuiltInTemplate {
   calendar: CalendarBody;
 }
 
+/** A calendar with a backward era before the epoch (like BC) and a forward era from it. */
 const calendar = (name: string, era: string, abbr: string): CalendarBody => ({
+  ...singleEra(name, era, abbr),
+  eras: [
+    { name: `Before the ${era}`, abbr: `B${abbr}`, startDay: -1_000_000_000, direction: -1 },
+    { name: era, abbr, startDay: 0, direction: 1 },
+  ],
+});
+
+const singleEra = (name: string, era: string, abbr: string): CalendarBody => ({
   name,
   epochOffset: 0,
   months: Array.from({ length: 12 }, (_, i) => ({ name: `Month ${i + 1}`, days: 30 })),
@@ -644,7 +653,8 @@ const blank: BuiltInTemplate = {
   ...TEMPLATE_INFO.blank,
   groups: ['Civilisation', 'Land', 'War', 'Lore'],
   units: [],
-  calendar: calendar('Default calendar', 'Era', 'E'),
+  // The bootstrap spec fixes Blank at one era.
+  calendar: singleEra('Default calendar', 'Era', 'E'),
   types: [],
   links: [],
 };

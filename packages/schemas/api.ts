@@ -207,3 +207,28 @@ export interface EntityTypeDto extends EntityTypeInput {
   key: string;
   order: number;
 }
+
+export const PROMINENCE = ['main', 'supporting', 'minor', 'background'] as const;
+export const CANON_STATES = ['canon', 'tentative', 'scrapped'] as const;
+
+/** Entry body from the client. `fields` is validated against the entry's type in core. */
+export const entityInput = z.object({
+  typeKey: z.string().min(1, 'Pick a type'),
+  name: z.string().trim().min(1, 'Name the entry').max(200),
+  aliases: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
+  summary: z.string().trim().max(5_000).default(''),
+  prominence: z.enum(PROMINENCE).default('minor'),
+  canonState: z.enum(CANON_STATES).default('canon'),
+  tags: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
+  fields: z.record(z.string(), z.unknown()).default({}),
+});
+
+export type EntityInput = z.infer<typeof entityInput>;
+
+export interface EntityDto extends EntityInput {
+  key: string;
+  slug: string;
+  updatedAt: string;
+}
+
+export const mergeBody = z.object({ keepKey: z.string().min(1), mergeKey: z.string().min(1) });

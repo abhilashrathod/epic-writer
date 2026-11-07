@@ -237,6 +237,17 @@ export const documentVersions = {
       { ...opts, sort: { createdAt: -1 }, projection: { text: 0 } },
     ),
 
+  /** Working copies whose text contains `needle` (e.g. a mention marker). */
+  findWorkingContaining: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; needle: string }) =>
+    col(db, 'documentVersions')
+      .find({
+        projectId: p.projectId,
+        branchId: p.branchId,
+        kind: 'working',
+        text: { $regex: p.needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') },
+      })
+      .toArray(),
+
   /** Snapshots newest first, without their text. */
   listSnapshots: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
     col(db, 'documentVersions')

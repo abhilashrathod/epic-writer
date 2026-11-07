@@ -56,6 +56,18 @@ describe('entityFieldsSchema', () => {
     expect(schema.safeParse({}).success).toBe(false);
   });
 
+  it('says which required field is missing', () => {
+    const r = entityFieldsSchema([
+      f('terms', 'text', { label: 'Terms', required: true }),
+      f('size', 'number', { label: 'Size', required: true }),
+    ]).safeParse({});
+    expect(r.success).toBe(false);
+    expect(r.error?.issues.map((i) => i.message)).toEqual([
+      'Terms is required',
+      'Size is required',
+    ]);
+  });
+
   it('rejects any value for a choice field with no options', () => {
     expect(entityFieldsSchema([f('c', 'enum')]).safeParse({ c: 'x' }).success).toBe(false);
   });

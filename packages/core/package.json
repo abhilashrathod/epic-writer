@@ -4,7 +4,8 @@
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./calendar": "./calendar.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

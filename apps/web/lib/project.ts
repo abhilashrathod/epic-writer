@@ -1,7 +1,7 @@
 import { ObjectId } from 'mongodb';
 import { NotFound, openProject, type ProjectContext, type VersionSummary } from '@epic/core';
-import type { DocumentDoc, EntityTypeDoc, UserDoc, WorkDoc } from '@epic/db';
-import type { DocumentDto, EntityTypeDto, VersionDto, WorkDto } from '@epic/schemas/api';
+import type { DocumentDoc, EntityDoc, EntityTypeDoc, UserDoc, WorkDoc } from '@epic/db';
+import type { DocumentDto, EntityDto, EntityTypeDto, VersionDto, WorkDto } from '@epic/schemas/api';
 import { getAppDb } from './server';
 
 /** Resolves a project id from the URL for this user; malformed and foreign ids are both NotFound. */
@@ -45,4 +45,18 @@ export const toEntityTypeDto = (t: EntityTypeDoc): EntityTypeDto => ({
   traits: t.traits,
   fields: t.fields,
   order: t.order,
+});
+
+export const toEntityDto = (e: EntityDoc): EntityDto => ({
+  key: e.key,
+  slug: e.slug,
+  typeKey: e.typeKey,
+  name: e.name,
+  aliases: e.aliases,
+  summary: e.summary,
+  prominence: e.prominence,
+  canonState: e.canonState,
+  tags: e.tags,
+  fields: e.fields,
+  updatedAt: e.createdAt.toISOString(),
 });

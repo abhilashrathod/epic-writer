@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entityTypeInput } from '@epic/schemas/api';
+import { formatStoryTime } from './calendar';
 import { applyTemplate, BUILT_IN_TEMPLATES } from './templates';
 
 describe('built-in templates', () => {
@@ -27,6 +28,12 @@ describe('built-in templates', () => {
       }
     });
   }
+
+  it('gives story templates an era before the epoch, so early dates read like BC', () => {
+    const cal = BUILT_IN_TEMPLATES.mythological.calendar;
+    expect(formatStoryTime(cal, { start: -3600, end: null, precision: 'year' })).toBe('10 BA');
+    expect(formatStoryTime(cal, { start: 0, end: null, precision: 'year' })).toBe('1 A');
+  });
 
   it('gives each application fresh keys', () => {
     const a = applyTemplate(BUILT_IN_TEMPLATES.mythological);

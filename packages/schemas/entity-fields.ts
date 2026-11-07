@@ -86,11 +86,18 @@ export function entityFieldsSchema(fields: readonly FieldShape[]) {
   const shape: Record<string, z.ZodType> = {};
   for (const f of fields) {
     const v = valueSchema(f);
-    shape[f.key] = f.required
-      ? f.kind === 'text' || f.kind === 'richtext'
+    if (!f.required) {
+      shape[f.key] = v.nullable().optional();
+      continue;
+    }
+    const present = z.custom((x) => x !== undefined && x !== null, {
+      message: `${f.label} is required`,
+    });
+    const value =
+      f.kind === 'text' || f.kind === 'richtext'
         ? z.string().trim().min(1, `${f.label} is required`)
-        : v
-      : v.nullable().optional();
+        : v;
+    shape[f.key] = present.pipe(value);
   }
   return z.strictObject(shape);
 }

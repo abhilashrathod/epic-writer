@@ -136,7 +136,7 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - Budget: decoration updates stay under 16 ms per keystroke on a 60-page (~3,000-line) script. A benchmark test enforces it.
 - Load CodeMirror language packs (`@codemirror/lang-markdown`) with a dynamic `import()` into a `Compartment`, only for documents that need them. A static import made Turbopack's dev server restart the shared entry chunk and reload pages in an endless loop.
 - Never change the React tree around the editor (e.g. returning different wrappers in focus mode); hide chrome with CSS instead. A remount throws away unsaved text.
-- If `pnpm dev` ever reloads pages in a loop ("HMR hash mismatch"), stop it and `rm -rf apps/web/.next`; the Turbopack cache can go stale.
+- Turbopack's on-disk dev cache is off (`turbopackFileSystemCacheForDev: false` in `apps/web/next.config.ts`): it went stale when code changed between dev runs and made pages reload in a loop ("HMR hash mismatch"). Keep it off. If a loop ever returns, stop `pnpm dev` and `rm -rf apps/web/.next`.
 
 ## Code conventions
 
