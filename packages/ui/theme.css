@@ -20,6 +20,14 @@
   --color-selected: var(--selected);
   --color-on-selected: var(--on-selected);
   --color-focus: var(--focus);
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  --color-cat-6: var(--cat-6);
+  --color-cat-7: var(--cat-7);
+  --color-cat-8: var(--cat-8);
   --color-transparent: transparent;
   --color-current: currentColor;
 

@@ -1,7 +1,30 @@
 import { z } from 'zod';
+import { FIELD_KINDS } from './entity-fields';
+
+export const TEMPLATE_KEYS = ['blank', 'mythological', 'fantasy', 'space'] as const;
+
+export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
+
+/** Shown when choosing a template; the full definitions live in packages/core/templates.ts. */
+export const TEMPLATE_INFO: Record<
+  (typeof TEMPLATE_KEYS)[number],
+  { name: string; description: string }
+> = {
+  blank: { name: 'Blank', description: 'Start empty and define your own entry types.' },
+  mythological: {
+    name: 'Mythological epic',
+    description: 'Dynasties, kingdoms, divine weapons, vows and curses.',
+  },
+  fantasy: {
+    name: 'Epic fantasy',
+    description: 'Great houses, realms, armies and a magic system with costs.',
+  },
+  space: { name: 'Space opera', description: 'Factions, star systems, ships and technology.' },
+};
 
 export const createProjectBody = z.object({
   name: z.string().trim().min(1, 'Name the project').max(200, 'Keep the name under 200 characters'),
+  templateKey: z.enum(TEMPLATE_KEYS).default('blank'),
 });
 
 export const preferencesBody = z
@@ -103,4 +126,84 @@ export interface VersionDto {
 export interface SaveConflictDto {
   error: string;
   current: { text: string; version: number };
+}
+
+export const TRAITS = [
+  'born',
+  'locatable',
+  'holdable',
+  'hasStrength',
+  'ranked',
+  'position',
+  'institution',
+  'ruleSystem',
+  'ability',
+  'event',
+  'secret',
+  'setup',
+  'account',
+  'transport',
+  'resource',
+  'term',
+  'geo',
+] as const;
+
+/** Entry type colours are token names (`--cat-1`...), never hex: see packages/ui/tokens.css. */
+export const TYPE_COLORS = [
+  'cat-1',
+  'cat-2',
+  'cat-3',
+  'cat-4',
+  'cat-5',
+  'cat-6',
+  'cat-7',
+  'cat-8',
+] as const;
+
+export const fieldDefInput = z.object({
+  key: z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/, 'Field keys are camelCase letters and digits'),
+  label: z.string().trim().min(1, 'Name the field').max(80),
+  kind: z.enum(FIELD_KINDS),
+  options: z.array(z.string().trim().min(1).max(80)).max(100).default([]),
+  required: z.boolean().default(false),
+  timeVarying: z.boolean().default(false),
+  refTypeKeys: z.array(z.string().min(1)).max(20).default([]),
+});
+
+export const entityTypeInput = z
+  .object({
+    name: z.string().trim().min(1, 'Name the type').max(80),
+    pluralName: z.string().trim().min(1, 'Give the plural').max(80),
+    icon: z.string().max(32).default('circle'),
+    color: z.enum(TYPE_COLORS).default('cat-1'),
+    group: z.string().trim().min(1, 'Pick a group').max(60),
+    parentTypeKey: z.string().min(1).nullable().default(null),
+    traits: z.array(z.enum(TRAITS)).default([]),
+    fields: z.array(fieldDefInput).max(60).default([]),
+  })
+  .superRefine((t, ctx) => {
+    const seen = new Set<string>();
+    t.fields.forEach((f, i) => {
+      if (seen.has(f.key))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fields', i, 'key'],
+          message: `Two fields use the key "${f.key}"`,
+        });
+      seen.add(f.key);
+      if ((f.kind === 'enum' || f.kind === 'multiEnum') && f.options.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fields', i, 'options'],
+          message: `"${f.label}" needs at least one choice`,
+        });
+      }
+    });
+  });
+
+export type EntityTypeInput = z.infer<typeof entityTypeInput>;
+
+export interface EntityTypeDto extends EntityTypeInput {
+  key: string;
+  order: number;
 }

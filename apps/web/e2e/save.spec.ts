@@ -64,7 +64,9 @@ for (const choice of ['Keep my version', 'Use the other version'] as const) {
     await a.keyboard.type('From device A.');
     await expect(status(a)).toHaveText('Saved');
     await b.keyboard.type('From device B.');
-    await expect(b.getByRole('alert').filter({ hasText: 'changed on another device' })).toBeVisible();
+    await expect(
+      b.getByRole('alert').filter({ hasText: 'changed on another device' }),
+    ).toBeVisible();
 
     await b.getByRole('button', { name: choice }).click();
     const kept = choice === 'Keep my version' ? 'From device B.' : 'From device A.';

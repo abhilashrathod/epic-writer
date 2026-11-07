@@ -31,7 +31,7 @@ describe('tokens.css', () => {
     expect(ink).toEqual(
       expect.arrayContaining(['--bg', '--surface', '--primary', '--on-primary', '--warn-soft']),
     );
-    expect(ink).toHaveLength(16);
+    expect(ink).toHaveLength(24);
     expect(sand).toEqual(ink);
   });
 

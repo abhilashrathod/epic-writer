@@ -6,3 +6,5 @@ export * from './list-projects';
 export * from './defaults';
 export * from './works';
 export * from './save';
+export * from './entity-types';
+export * from './templates';

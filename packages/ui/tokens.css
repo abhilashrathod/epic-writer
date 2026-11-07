@@ -38,6 +38,16 @@
   --ok: light-dark(#1d7a4b, #4cc38a);
   --ok-soft: light-dark(#ddf2e6, #12271c);
 
+  /* Entry type colours: muted so cards stay calm in a monochrome skin. */
+  --cat-1: light-dark(#4a63b8, #8fa3e8);
+  --cat-2: light-dark(#8a4fb0, #c49ae0);
+  --cat-3: light-dark(#b0662a, #e8a46a);
+  --cat-4: light-dark(#3f8a5a, #7cc79a);
+  --cat-5: light-dark(#b23b4e, #f08396);
+  --cat-6: light-dark(#2f8a8a, #74c9c9);
+  --cat-7: light-dark(#6b6f2a, #b8bd6a);
+  --cat-8: light-dark(#6b6b73, #a7a7ae);
+
   /* Inkwell selection inverts: solid ink, surface-coloured text. */
   --selected: var(--ink);
   --on-selected: var(--surface);
@@ -67,6 +77,15 @@
   --bad-soft: light-dark(#f5ddd5, #33191a);
   --ok: light-dark(#3f7a3a, #8cc47a);
   --ok-soft: light-dark(#e1ecd2, #1b2717);
+
+  --cat-1: light-dark(#3f5f8f, #8fb0d8);
+  --cat-2: light-dark(#7a4b8c, #c09ad0);
+  --cat-3: light-dark(#a8601f, #eba75f);
+  --cat-4: light-dark(#4f7a3a, #9cc77f);
+  --cat-5: light-dark(#a83a32, #ef8a7f);
+  --cat-6: light-dark(#2f7a73, #7cc2ba);
+  --cat-7: light-dark(#7a6a2a, #c7b56a);
+  --cat-8: light-dark(#6f665a, #b0a696);
 
   /* Sand selects with a deeper tone instead of inverting. */
   --selected: var(--sunk);

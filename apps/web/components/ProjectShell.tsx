@@ -14,7 +14,7 @@ export function ProjectShell({
   projectName: string;
   children: ReactNode;
 }) {
-  const { focus } = useWorkspace();
+  const { focus, projectId } = useWorkspace();
   const [navOpen, setNavOpen] = useState(false);
   // Focus mode hides the chrome with CSS. Changing the tree instead would remount the editor and
   // throw away unsaved text.
@@ -30,6 +30,12 @@ export function ProjectShell({
           ← All projects
         </Link>
         <p className="font-semibold tracking-tight">{projectName}</p>
+        <Link
+          href={`/projects/${projectId}/codex/types`}
+          className="text-sm text-muted hover:text-ink"
+        >
+          Entry types
+        </Link>
         <WorksTree onNavigate={() => setNavOpen(false)} />
       </aside>
       <main className="min-w-0 flex-1 pb-14 md:pb-0">{children}</main>

@@ -17,8 +17,8 @@ export function GET() {
 export function POST(req: Request) {
   return handle(async () => {
     const user = await requireUser();
-    const { name } = await parseBody(req, createProjectBody);
-    const p = await createProject(getAppDb(), { ownerId: user._id, name, templateKey: 'blank' });
+    const { name, templateKey } = await parseBody(req, createProjectBody);
+    const p = await createProject(getAppDb(), { ownerId: user._id, name, templateKey });
     const project: ProjectDto = {
       id: p._id.toHexString(),
       name: p.name,

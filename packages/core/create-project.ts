@@ -1,25 +1,18 @@
 import { ObjectId, type Db } from 'mongodb';
-import { v7 as uuidv7 } from 'uuid';
 import { branches, projects, type CalendarBody, type ProjectDoc } from '@epic/db';
 import { commitInSession } from './commit';
+import { applyTemplate, BUILT_IN_TEMPLATES, type TemplateKey } from './templates';
 import { emptyOverview, emptyVisual } from './defaults';
 import { Invalid } from './errors';
 
 export interface CreateProjectInput {
   ownerId: ObjectId;
   name: string;
-  templateKey: 'blank';
+  templateKey: TemplateKey;
 }
 
-export const DEFAULT_CALENDAR: CalendarBody = {
-  name: 'Default calendar',
-  epochOffset: 0,
-  months: Array.from({ length: 12 }, (_, i) => ({ name: `Month ${i + 1}`, days: 30 })),
-  daysPerWeek: 7,
-  weekdayNames: Array.from({ length: 7 }, (_, i) => `Day ${i + 1}`),
-  eras: [{ name: 'Era', abbr: 'E', startDay: 0, direction: 1 }],
-  displayFormat: '{day} {month}, {year} {era}',
-};
+/** The Blank template's calendar: one era, 12 months of 30 days. */
+export const DEFAULT_CALENDAR: CalendarBody = BUILT_IN_TEMPLATES.blank.calendar;
 
 /** Creates a project, its main branch, and the default calendar as commit 1, atomically. */
 export async function createProject(db: Db, input: CreateProjectInput): Promise<ProjectDoc> {
@@ -28,7 +21,7 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
   if (name.length > 200) throw new Invalid('Project name is longer than 200 characters');
 
   const branchId = new ObjectId();
-  const calendarKey = uuidv7();
+  const template = applyTemplate(BUILT_IN_TEMPLATES[input.templateKey]);
   const session = db.client.startSession();
   try {
     return await session.withTransaction(async () => {
@@ -42,9 +35,9 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
           templateKey: input.templateKey,
           mainBranchId: branchId,
           seqCounter: 0,
-          defaultCalendarKey: calendarKey,
-          units: [],
-          typeGroups: [],
+          defaultCalendarKey: template.calendarKey,
+          units: template.units,
+          typeGroups: template.typeGroups,
           aiSettings: {
             provider: 'anthropic',
             models: { extraction: '', continuity: '', suggestions: '', chat: '', embedding: '' },
@@ -77,9 +70,7 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
         branchId,
         message: 'Create project',
         author: { kind: 'user', userId: input.ownerId },
-        changes: [
-          { op: 'create', collection: 'calendars', key: calendarKey, data: DEFAULT_CALENDAR },
-        ],
+        changes: template.changes,
       });
       return { ...project, seqCounter: 1 };
     });

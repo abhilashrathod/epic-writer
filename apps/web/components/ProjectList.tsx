@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
-import type { ProjectDto } from '@epic/schemas/api';
+import { TEMPLATE_INFO, TEMPLATE_KEYS, type ProjectDto, type TemplateKey } from '@epic/schemas/api';
 import { Button, Card, Field } from '@epic/ui';
 import { api } from '../lib/api-client';
 
@@ -13,6 +13,7 @@ export function ProjectList() {
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [templateKey, setTemplateKey] = useState<TemplateKey>('mythological');
 
   const list = useQuery({
     queryKey: ['projects'],
@@ -22,7 +23,7 @@ export function ProjectList() {
     mutationFn: (projectName: string) =>
       api<{ project: ProjectDto }>('/api/projects', {
         method: 'POST',
-        body: { name: projectName },
+        body: { name: projectName, templateKey },
       }),
     onSuccess: async () => {
       setName('');
@@ -61,6 +62,30 @@ export function ProjectList() {
               maxLength={200}
               error={create.error?.message}
             />
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1.5 text-sm font-medium">Start from</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {TEMPLATE_KEYS.map((k) => (
+                  <label
+                    key={k}
+                    className={`flex cursor-pointer flex-col gap-0.5 rounded-lg p-3 text-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus ${templateKey === k ? 'bg-selected text-on-selected' : 'bg-surface'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="template"
+                      value={k}
+                      checked={templateKey === k}
+                      onChange={() => setTemplateKey(k)}
+                      className="sr-only"
+                    />
+                    <span className="font-medium">{TEMPLATE_INFO[k].name}</span>
+                    <span className={templateKey === k ? 'opacity-80' : 'text-muted'}>
+                      {TEMPLATE_INFO[k].description}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="flex gap-2">
               <Button type="submit" variant="primary" disabled={create.isPending || !name.trim()}>
                 {create.isPending ? 'Creating…' : 'Create project'}

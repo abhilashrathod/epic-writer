@@ -7,7 +7,8 @@
     ".": "./index.ts",
     "./env": "./env.ts",
     "./logger": "./logger.ts",
-    "./api": "./api.ts"
+    "./api": "./api.ts",
+    "./entity-fields": "./entity-fields.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."
