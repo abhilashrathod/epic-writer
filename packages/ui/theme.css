@@ -1,0 +1,28 @@
+/* Maps tokens to Tailwind utilities (bg-surface, text-muted, font-script, ...). Import after tailwindcss. */
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-sunk: var(--sunk);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-selected: var(--selected);
+  --color-on-selected: var(--on-selected);
+  --color-focus: var(--focus);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-ui: var(--type-ui);
+  --font-script: var(--type-script);
+}
