@@ -201,16 +201,21 @@ function buildLineClasses(view: EditorView): DecorationSet {
   return b.finish();
 }
 
+/** A mention shown as its display name. `data-entry-key` lets the page open the entry's card on click. */
 class MentionWidget extends WidgetType {
-  constructor(readonly name: string) {
+  constructor(
+    readonly name: string,
+    readonly key: string,
+  ) {
     super();
   }
   override eq(other: MentionWidget) {
-    return other.name === this.name;
+    return other.name === this.name && other.key === this.key;
   }
   toDOM() {
     const span = document.createElement('span');
     span.className = 'cm-mention';
+    span.dataset.entryKey = this.key;
     span.textContent = this.name;
     return span;
   }
@@ -245,7 +250,7 @@ function buildMarkers(view: EditorView): DecorationSet {
         if (m.kind === 'note') continue;
         const deco =
           m.kind === 'mention'
-            ? Decoration.replace({ widget: new MentionWidget(m.name ?? '') })
+            ? Decoration.replace({ widget: new MentionWidget(m.name ?? '', m.key ?? '') })
             : hidden;
         // A scene marker also swallows the space before it, so the heading doesn't end in a gap.
         const start = m.kind === 'scene' && line.text[m.from - 1] === ' ' ? m.from - 1 : m.from;

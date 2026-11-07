@@ -2,12 +2,17 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { mentionMarker } from '@epic/fountain';
+import type { MentionCandidate } from '@epic/fountain/mentions';
 import type { DocumentTextDto } from '@epic/schemas/api';
 import { Button } from '@epic/ui';
 import { api } from '../lib/api-client';
 import { useDocumentSync, type SaveStatus } from '../lib/use-document-sync';
+import { useEntities, useTypes } from '../lib/use-types';
+import { EntryForm } from './codex/EntryForm';
 import { HistoryPanel } from './HistoryPanel';
-import { ScriptEditor } from './ScriptEditor';
+import { MentionCard } from './MentionCard';
+import { ScriptEditor, type EditorHandle, type TextSelection } from './ScriptEditor';
 import { useWorkspace } from './Workspace';
 
 const STATUS_TEXT: Record<SaveStatus, string> = {
@@ -51,6 +56,37 @@ function LoadedDocument({ data }: { data: DocumentTextDto }) {
     initial: { text, version: data.version },
   });
   const [showHistory, setShowHistory] = useState(false);
+  const meta = useTypes(projectId);
+  const entities = useEntities(projectId);
+  const editor = useRef<EditorHandle | null>(null);
+  const [selection, setSelection] = useState<TextSelection | null>(null);
+  const [adding, setAdding] = useState<TextSelection | null>(null);
+  const [card, setCard] = useState<{ key: string; rect: DOMRect } | null>(null);
+
+  // Read by autocomplete when it opens; a ref keeps the editor from being rebuilt as entries change.
+  const candidates = useRef<MentionCandidate[]>([]);
+  const types = meta.data?.types ?? [];
+  candidates.current = (entities.data ?? [])
+    .filter((e) => e.canonState !== 'scrapped')
+    .map((e) => {
+      const t = types.find((x) => x.key === e.typeKey);
+      return {
+        key: e.key,
+        name: e.name,
+        aliases: e.aliases,
+        typeName: t?.name ?? '',
+        speaker: !!t?.traits.includes('born'),
+      };
+    });
+  // "Add to codex" works on a short, single-line selection: a name, not a paragraph.
+  const nameSelection =
+    selection &&
+    selection.text.trim() &&
+    selection.text.length <= 120 &&
+    !selection.text.includes('\n')
+      ? selection
+      : null;
+  const cardEntry = card ? entities.data?.find((e) => e.key === card.key) : undefined;
   const [typing, setTyping] = useState(false);
   const [showScenes, setShowScenes] = useState(false);
   const typingRef = useRef(false);
@@ -104,8 +140,25 @@ function LoadedDocument({ data }: { data: DocumentTextDto }) {
           </div>
         )}
         <div className="flex gap-1">
+          {!focus && nameSelection && (
+            <Button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setAdding(nameSelection);
+                setShowHistory(false);
+              }}
+            >
+              Add to codex
+            </Button>
+          )}
           {!focus && (
-            <Button onClick={() => setShowHistory((h) => !h)} aria-expanded={showHistory}>
+            <Button
+              onClick={() => {
+                setShowHistory((h) => !h);
+                setAdding(null);
+              }}
+              aria-expanded={showHistory}
+            >
               History
             </Button>
           )}
@@ -164,10 +217,40 @@ function LoadedDocument({ data }: { data: DocumentTextDto }) {
               onJumpHandler={setJumpHandler}
               onTyping={onTyping}
               onChange={sync.onChange}
-              onReady={sync.onReady}
+              onReady={(h) => {
+                editor.current = h;
+                sync.onReady(h);
+              }}
+              getCandidates={() => candidates.current}
+              onMentionClick={(key, rect) => setCard({ key, rect })}
+              onSelection={setSelection}
             />
           </div>
         </div>
+        {adding && !focus && meta.data && (
+          <aside
+            aria-label="Add to codex"
+            className="w-full shrink-0 rounded-xl bg-panel p-4 md:w-96"
+          >
+            <EntryForm
+              projectId={projectId}
+              meta={meta.data}
+              entries={entities.data ?? []}
+              existing={null}
+              initialName={adding.text.trim()}
+              onDone={(key) => {
+                // Turn the selected words into a mention of the new entry, keeping the words as written.
+                if (key)
+                  editor.current?.replaceRange(
+                    adding.from,
+                    adding.to,
+                    mentionMarker(key, adding.text.trim()),
+                  );
+                setAdding(null);
+              }}
+            />
+          </aside>
+        )}
         {showHistory && !focus && (
           <HistoryPanel
             base={base}
@@ -177,6 +260,15 @@ function LoadedDocument({ data }: { data: DocumentTextDto }) {
           />
         )}
       </div>
+      {card && (
+        <MentionCard
+          projectId={projectId}
+          entry={cardEntry}
+          type={types.find((t) => t.key === cardEntry?.typeKey)}
+          rect={card.rect}
+          onClose={() => setCard(null)}
+        />
+      )}
     </div>
   );
 }

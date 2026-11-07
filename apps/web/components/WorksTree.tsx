@@ -8,6 +8,7 @@ import type { DocumentDto, WorkDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import { api } from '../lib/api-client';
 import { useTree, useTreeMutation } from '../lib/use-tree';
+import { useEntities } from '../lib/use-types';
 import { NewWorkForm } from './NewWorkForm';
 import { useWorkspace } from './Workspace';
 
@@ -105,6 +106,8 @@ function DocNode(props: {
 }) {
   const { doc, work, all } = props;
   const { projectId, scenes, jumpTo } = useWorkspace();
+  const entities = useEntities(projectId);
+  const names = new Map((entities.data ?? []).map((e) => [e.key, e.name]));
   const params = useParams<{ documentKey?: string }>();
   const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete'>('view');
   const [title, setTitle] = useState(doc.title);
@@ -229,6 +232,11 @@ function DocNode(props: {
               >
                 {s.heading || 'Untitled scene'}
               </button>
+              {s.entityKeys.length > 0 && (
+                <p className="truncate px-2 pb-1 text-[11px] text-faint">
+                  {s.entityKeys.map((k) => names.get(k) ?? '(deleted)').join(' · ')}
+                </p>
+              )}
             </li>
           ))}
         </ol>

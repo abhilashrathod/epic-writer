@@ -5,12 +5,14 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./codemirror": "./codemirror.ts"
+    "./codemirror": "./codemirror.ts",
+    "./mentions": "./mentions.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15"
   }

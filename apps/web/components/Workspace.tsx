@@ -9,13 +9,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { SceneSpan } from '@epic/fountain';
+import type { OutlineScene } from './ScriptEditor';
 
 interface WorkspaceValue {
   projectId: string;
   /** Scenes of the open document, refreshed shortly after typing pauses. */
-  scenes: SceneSpan[];
-  setScenes: (s: SceneSpan[]) => void;
+  scenes: OutlineScene[];
+  setScenes: (s: OutlineScene[]) => void;
   /** Moves the open editor's cursor to a text offset. */
   jumpTo: (pos: number) => void;
   setJumpHandler: (fn: ((pos: number) => void) | null) => void;
@@ -33,7 +33,7 @@ export function WorkspaceProvider({
   projectId: string;
   children: ReactNode;
 }) {
-  const [scenes, setScenes] = useState<SceneSpan[]>([]);
+  const [scenes, setScenes] = useState<OutlineScene[]>([]);
   const [focus, setFocus] = useState(false);
   const jump = useRef<((pos: number) => void) | null>(null);
   const jumpTo = useCallback((pos: number) => jump.current?.(pos), []);
