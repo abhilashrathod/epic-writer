@@ -9,3 +9,4 @@ export * from './save';
 export * from './entity-types';
 export * from './templates';
 export * from './entities';
+export * from './links';

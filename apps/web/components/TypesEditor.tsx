@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Button, Icon, TYPE_TEXT, focusRing } from '@epic/ui';
-import { useTypes } from '../lib/use-types';
+import { useLinkTypes, useTypes } from '../lib/use-types';
+import { ConnectionTypeForm } from './ConnectionTypeForm';
 import { TypeForm } from './TypeForm';
 import { useWorkspace } from './Workspace';
 
@@ -10,7 +11,8 @@ import { useWorkspace } from './Workspace';
 export function TypesEditor() {
   const { projectId } = useWorkspace();
   const types = useTypes(projectId);
-  const [selected, setSelected] = useState<string | 'new' | null>(null);
+  const linkTypes = useLinkTypes(projectId);
+  const [selected, setSelected] = useState<string | 'new' | 'newLink' | null>(null);
 
   if (types.isPending) return <p className="p-8 text-muted">Loading entry types…</p>;
   if (types.error)
@@ -56,9 +58,28 @@ export function TypesEditor() {
             </section>
           );
         })}
+        <section aria-label="Connection types" className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-faint">Connections</p>
+            <Button className="h-7" onClick={() => setSelected('newLink')}>
+              + New
+            </Button>
+          </div>
+          {linkTypes.data?.length === 0 && <p className="text-sm text-muted">None yet.</p>}
+          <ul className="flex flex-col text-sm">
+            {linkTypes.data?.map((l) => (
+              <li key={l.key} className="px-2 py-1">
+                {l.label}
+                {!l.symmetric && <span className="text-muted"> / {l.inverseLabel}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
       </nav>
       <div className="min-w-0 flex-1">
-        {selected === null ? (
+        {selected === 'newLink' ? (
+          <ConnectionTypeForm types={list} onDone={() => setSelected(null)} />
+        ) : selected === null ? (
           <p className="text-muted">Pick a type to edit it, or add a new one.</p>
         ) : (
           <TypeForm

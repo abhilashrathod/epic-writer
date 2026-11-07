@@ -23,7 +23,13 @@ const STATUS_TEXT: Record<SaveStatus, string> = {
   conflict: 'Changed on another device',
 };
 
-export function DocumentEditor({ documentKey }: { documentKey: string }) {
+export function DocumentEditor({
+  documentKey,
+  sceneKey,
+}: {
+  documentKey: string;
+  sceneKey?: string;
+}) {
   const { projectId } = useWorkspace();
   const doc = useQuery({
     queryKey: ['text', projectId, documentKey],
@@ -42,10 +48,10 @@ export function DocumentEditor({ documentKey }: { documentKey: string }) {
         Couldn’t open this document: {doc.error.message}
       </p>
     );
-  return <LoadedDocument key={documentKey} data={doc.data} />;
+  return <LoadedDocument key={documentKey} data={doc.data} sceneKey={sceneKey} />;
 }
 
-function LoadedDocument({ data }: { data: DocumentTextDto }) {
+function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: string }) {
   const { projectId, setScenes, setJumpHandler, focus, setFocus, scenes, jumpTo } = useWorkspace();
   const { document, text } = data;
   const base = `/api/projects/${projectId}/documents/${document.key}`;
@@ -224,6 +230,7 @@ function LoadedDocument({ data }: { data: DocumentTextDto }) {
               getCandidates={() => candidates.current}
               onMentionClick={(key, rect) => setCard({ key, rect })}
               onSelection={setSelection}
+              initialSceneKey={sceneKey}
             />
           </div>
         </div>

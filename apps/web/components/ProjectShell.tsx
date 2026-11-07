@@ -30,11 +30,8 @@ export function ProjectShell({
           ← All projects
         </Link>
         <p className="font-semibold tracking-tight">{projectName}</p>
-        <Link
-          href={`/projects/${projectId}/codex/types`}
-          className="text-sm text-muted hover:text-ink"
-        >
-          Entry types
+        <Link href={`/projects/${projectId}/codex`} className="text-sm text-muted hover:text-ink">
+          Codex
         </Link>
         <WorksTree onNavigate={() => setNavOpen(false)} />
       </aside>

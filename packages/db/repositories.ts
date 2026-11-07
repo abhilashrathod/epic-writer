@@ -284,6 +284,12 @@ export const scenes = {
         opts,
       );
   },
+  /** Scenes that mention an entry, in narrative order. */
+  listForEntity: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; entityKey: string }) =>
+    col(db, 'scenes')
+      .find({ projectId: p.projectId, branchId: p.branchId, entityKeys: p.entityKey })
+      .sort({ order: 1 })
+      .toArray(),
   listForDocument: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
     col(db, 'scenes').find(p).sort({ order: 1 }).toArray(),
 };

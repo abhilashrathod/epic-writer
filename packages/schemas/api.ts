@@ -232,3 +232,58 @@ export interface EntityDto extends EntityInput {
 }
 
 export const mergeBody = z.object({ keepKey: z.string().min(1), mergeKey: z.string().min(1) });
+
+export const LINK_KINDS = [
+  'kinship',
+  'relation',
+  'causal',
+  'ownership',
+  'location',
+  'teaching',
+  'membership',
+  'knowledge',
+  'narrative',
+] as const;
+
+export const linkTypeInput = z.object({
+  label: z.string().trim().min(1, 'Name the connection, e.g. "parent of"').max(60),
+  inverseLabel: z.string().trim().min(1, 'Give the reverse name, e.g. "child of"').max(60),
+  kind: z.enum(LINK_KINDS),
+  symmetric: z.boolean().default(false),
+  fromTypeKeys: z.array(z.string().min(1)).max(50).default([]),
+  toTypeKeys: z.array(z.string().min(1)).max(50).default([]),
+});
+
+export interface LinkTypeDto extends z.infer<typeof linkTypeInput> {
+  key: string;
+}
+
+export const linkInput = z.object({
+  typeKey: z.string().min(1, 'Pick a kind of connection'),
+  fromKey: z.string().min(1),
+  toKey: z.string().min(1, 'Pick who or what to connect to'),
+  note: z.string().trim().max(1_000).default(''),
+  canonState: z.enum(CANON_STATES).default('canon'),
+});
+
+/** One connection seen from a given entry: `label` already reads from that entry's side. */
+export interface ConnectionDto {
+  key: string;
+  kind: (typeof LINK_KINDS)[number];
+  label: string;
+  otherKey: string;
+  note: string;
+  canonState: (typeof CANON_STATES)[number];
+}
+
+export interface RelationsDto {
+  connections: ConnectionDto[];
+  referencedBy: { entityKey: string; fieldLabel: string }[];
+  appearances: {
+    documentKey: string;
+    documentTitle: string;
+    sceneKey: string;
+    heading: string;
+    order: string;
+  }[];
+}

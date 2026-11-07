@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { CalendarShape } from '@epic/core/calendar';
-import type { EntityDto, EntityTypeDto } from '@epic/schemas/api';
+import type { EntityDto, EntityTypeDto, LinkTypeDto } from '@epic/schemas/api';
 import { api } from './api-client';
 
 export interface TypesData {
@@ -52,3 +52,18 @@ export function useEntities(projectId: string) {
       ),
   });
 }
+
+export const linkTypesKey = (projectId: string) => ['linkTypes', projectId] as const;
+
+export function useLinkTypes(projectId: string) {
+  return useQuery({
+    queryKey: linkTypesKey(projectId),
+    queryFn: () =>
+      api<{ linkTypes: LinkTypeDto[] }>(`/api/projects/${projectId}/link-types`).then(
+        (r) => r.linkTypes,
+      ),
+  });
+}
+
+export const relationsKey = (projectId: string, key: string) =>
+  ['relations', projectId, key] as const;

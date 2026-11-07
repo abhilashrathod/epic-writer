@@ -84,6 +84,8 @@ interface Props {
   onMentionClick?: (key: string, rect: DOMRect) => void;
   /** A non-empty selection, or null when it collapses. Not called while the selection stays empty. */
   onSelection?: (sel: TextSelection | null) => void;
+  /** Opens with the cursor at this scene (links from an entry's appearances). */
+  initialSceneKey?: string;
 }
 
 function outline(text: string, format: TextFormat): OutlineScene[] {
@@ -198,6 +200,15 @@ export function ScriptEditor(props: Props) {
       });
       view.focus();
     });
+    // Each editor instance places itself, so React's development double-mount can't lose the jump.
+    const start =
+      props.initialSceneKey &&
+      extractScenes(initialText, format).find((s) => s.key === props.initialSceneKey);
+    if (start)
+      view.dispatch({
+        selection: { anchor: start.from },
+        effects: EditorView.scrollIntoView(start.from, { y: 'start', yMargin: 48 }),
+      });
     view.focus();
     // Development-only handle for the Playwright performance test.
     if (process.env.NODE_ENV !== 'production')

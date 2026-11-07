@@ -7,6 +7,7 @@ import { Button, focusRing } from '@epic/ui';
 import { api } from '../../lib/api-client';
 import { entitiesKey, type TypesData } from '../../lib/use-types';
 import { EntryCard } from './EntryCard';
+import { EntryRelations } from './EntryRelations';
 import { FieldValue } from './FieldValue';
 
 const isEmpty = (v: unknown) =>
@@ -141,6 +142,12 @@ export function EntryDetail(props: {
           </div>
         ))}
       </dl>
+      <EntryRelations
+        projectId={props.projectId}
+        entry={entry}
+        entries={props.entries}
+        onOpen={props.onOpen}
+      />
     </article>
   );
 }
