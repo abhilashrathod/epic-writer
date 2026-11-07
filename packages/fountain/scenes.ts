@@ -76,27 +76,44 @@ export function extractScenes(text: string, format: TextFormat): SceneSpan[] {
   });
 }
 
+export interface TextEdit {
+  from: number;
+  to: number;
+  insert: string;
+}
+
 /**
- * Gives every scene a unique key marker: unmarked scenes get a new one, and a key already used by
- * an earlier scene (a pasted copy) is replaced. Returns the text unchanged if nothing was missing.
+ * Edits that give every scene a unique key marker: unmarked scenes get a new one, and a key already
+ * used by an earlier scene (a pasted copy) is replaced. Edits are in document order and don't
+ * overlap, so an editor can apply them as one change set without moving the cursor.
  */
-export function assignSceneKeys(text: string, format: TextFormat, newKey: () => string): string {
+export function sceneKeyEdits(text: string, format: TextFormat, newKey: () => string): TextEdit[] {
   const lines = splitLines(text);
   const seen = new Set<string>();
-  let changed = false;
+  const edits: TextEdit[] = [];
   for (const scene of extractScenes(text, format)) {
-    const line = lines[scene.line]!;
     if (scene.key && !seen.has(scene.key)) {
       seen.add(scene.key);
       continue;
     }
+    const line = lines[scene.line]!;
     const key = newKey();
     seen.add(key);
-    const stripped = scene.key
-      ? line.text.replace(sceneMarker(scene.key, format), '').trimEnd()
-      : line.text;
-    line.text = `${stripped.trimEnd()} ${sceneMarker(key, format)}`;
-    changed = true;
+    const stripped = scene.key ? line.text.replace(sceneMarker(scene.key, format), '') : line.text;
+    edits.push({
+      from: line.from,
+      to: line.from + line.text.length,
+      insert: `${stripped.trimEnd()} ${sceneMarker(key, format)}`,
+    });
   }
-  return changed ? lines.map((l) => l.text).join('\n') : text;
+  return edits;
+}
+
+/** `text` with sceneKeyEdits applied. Returns the same string when nothing was missing. */
+export function assignSceneKeys(text: string, format: TextFormat, newKey: () => string): string {
+  let out = text;
+  for (const e of sceneKeyEdits(text, format, newKey).reverse()) {
+    out = out.slice(0, e.from) + e.insert + out.slice(e.to);
+  }
+  return out;
 }

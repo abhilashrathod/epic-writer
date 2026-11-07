@@ -7,6 +7,7 @@ import type {
   JobDoc,
   JobType,
   ProjectDoc,
+  SceneDoc,
   UserDoc,
 } from './collections';
 
@@ -188,8 +189,92 @@ export const documentVersions = {
     await col(db, 'documentVersions').insertOne(full, opts);
     return full;
   },
-  findWorking: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
-    col(db, 'documentVersions').findOne({ ...p, kind: 'working' }),
+  findWorking: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; documentKey: string },
+    opts: Opts = {},
+  ) => col(db, 'documentVersions').findOne({ ...p, kind: 'working' }, opts),
+
+  /**
+   * Replaces the working text only if it is still at `baseVersion` (optimistic save). Returns the
+   * updated row, or null when another save got there first.
+   */
+  saveWorking: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; documentKey: string; baseVersion: number },
+    fields: { text: string; textHash: string; wordCount: number; pageCount: number },
+    opts: Opts = {},
+  ) =>
+    col(db, 'documentVersions').findOneAndUpdate(
+      {
+        projectId: p.projectId,
+        branchId: p.branchId,
+        documentKey: p.documentKey,
+        kind: 'working',
+        version: p.baseVersion,
+      },
+      { $set: { ...fields, updatedAt: new Date() }, $inc: { version: 1 } },
+      { ...opts, returnDocument: 'after' },
+    ),
+
+  async insertSnapshot(
+    db: Db,
+    doc: Omit<DocumentVersionDoc, '_id' | 'createdAt' | 'updatedAt' | 'kind'>,
+    opts: Opts = {},
+  ): Promise<DocumentVersionDoc> {
+    const full = stamp<DocumentVersionDoc>({ ...doc, kind: 'snapshot' });
+    await col(db, 'documentVersions').insertOne(full, opts);
+    return full;
+  },
+
+  latestSnapshot: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; documentKey: string },
+    opts: Opts = {},
+  ) =>
+    col(db, 'documentVersions').findOne(
+      { ...p, kind: 'snapshot' },
+      { ...opts, sort: { createdAt: -1 }, projection: { text: 0 } },
+    ),
+
+  /** Snapshots newest first, without their text. */
+  listSnapshots: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
+    col(db, 'documentVersions')
+      .find({ ...p, kind: 'snapshot' }, { sort: { createdAt: -1 }, projection: { text: 0 } })
+      .toArray(),
+
+  findSnapshot: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; documentKey: string; id: ObjectId },
+  ) =>
+    col(db, 'documentVersions').findOne({
+      _id: p.id,
+      projectId: p.projectId,
+      branchId: p.branchId,
+      documentKey: p.documentKey,
+      kind: 'snapshot',
+    }),
+};
+
+// ---------- scenes ----------
+
+export const scenes = {
+  /** Scenes are derived on save: a document's rows are replaced wholesale. */
+  async replaceForDocument(
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; documentKey: string },
+    rows: Omit<SceneDoc, '_id' | 'createdAt' | 'updatedAt'>[],
+    opts: Opts = {},
+  ): Promise<void> {
+    await col(db, 'scenes').deleteMany(p, opts);
+    if (rows.length)
+      await col(db, 'scenes').insertMany(
+        rows.map((r) => stamp<SceneDoc>(r)),
+        opts,
+      );
+  },
+  listForDocument: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
+    col(db, 'scenes').find(p).sort({ order: 1 }).toArray(),
 };
 
 // ---------- jobs ----------

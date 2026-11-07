@@ -2,11 +2,11 @@
 
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, Transaction } from '@codemirror/state';
 import { EditorView, drawSelection, keymap, placeholder } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
-import { extractScenes, type SceneSpan, type TextFormat } from '@epic/fountain';
+import { extractScenes, type SceneSpan, type TextEdit, type TextFormat } from '@epic/fountain';
 import { fountain, hideMarkers } from '@epic/fountain/codemirror';
 
 const theme = EditorView.theme({
@@ -26,22 +26,42 @@ const proseHighlight = HighlightStyle.define([
   { tag: [tags.processingInstruction, tags.meta, tags.comment], color: 'var(--faint)' },
 ]);
 
+/** What the page can do to the editor without owning its text. */
+export interface EditorHandle {
+  getText(): string;
+  /** Replaces all text (restore, conflict resolution). Undoable. */
+  replaceText(text: string): void;
+  /** Applies bookkeeping edits such as scene key markers, outside undo history. */
+  applyEdits(edits: TextEdit[]): void;
+}
+
 interface Props {
   initialText: string;
   format: TextFormat;
   onScenes: (scenes: SceneSpan[]) => void;
   onJumpHandler: (fn: ((pos: number) => void) | null) => void;
   onTyping?: () => void;
+  /** Called on every text change; must stay cheap (it runs on the keystroke path). */
+  onChange?: () => void;
+  onReady?: (handle: EditorHandle | null) => void;
 }
 
 /**
  * CodeMirror editor for one document. It owns its text after mount: nothing on the keystroke path
  * touches React state, the network or the database (ED-8). The outline refreshes after a pause.
  */
-export function ScriptEditor({ initialText, format, onScenes, onJumpHandler, onTyping }: Props) {
+export function ScriptEditor({
+  initialText,
+  format,
+  onScenes,
+  onJumpHandler,
+  onTyping,
+  onChange,
+  onReady,
+}: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const callbacks = useRef({ onScenes, onTyping });
-  callbacks.current = { onScenes, onTyping };
+  const callbacks = useRef({ onScenes, onTyping, onChange });
+  callbacks.current = { onScenes, onTyping, onChange };
 
   useEffect(() => {
     let outlineTimer: ReturnType<typeof setTimeout> | undefined;
@@ -70,6 +90,7 @@ export function ScriptEditor({ initialText, format, onScenes, onJumpHandler, onT
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return;
             callbacks.current.onTyping?.();
+            callbacks.current.onChange?.();
             clearTimeout(outlineTimer);
             outlineTimer = setTimeout(() => refreshOutline(u.state.doc.toString()), 300);
           }),
@@ -87,6 +108,13 @@ export function ScriptEditor({ initialText, format, onScenes, onJumpHandler, onT
     }
 
     refreshOutline(initialText);
+    onReady?.({
+      getText: () => view.state.doc.toString(),
+      replaceText: (text) =>
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }),
+      applyEdits: (edits) =>
+        view.dispatch({ changes: edits, annotations: Transaction.addToHistory.of(false) }),
+    });
     onJumpHandler((pos) => {
       view.dispatch({
         selection: { anchor: pos },
@@ -102,6 +130,7 @@ export function ScriptEditor({ initialText, format, onScenes, onJumpHandler, onT
     return () => {
       clearTimeout(outlineTimer);
       onJumpHandler(null);
+      onReady?.(null);
       view.destroy();
     };
     // The editor is created once per document; the parent remounts it with a new key.

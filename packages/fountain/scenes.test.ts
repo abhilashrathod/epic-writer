@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignSceneKeys, extractScenes } from './scenes';
+import { assignSceneKeys, extractScenes, sceneKeyEdits } from './scenes';
 
 const keys = () => {
   let i = 0;
@@ -60,5 +60,15 @@ describe('assignSceneKeys', () => {
   it('returns the same string when nothing changes', () => {
     const text = 'INT. A [[@s:a]]';
     expect(assignSceneKeys(text, 'fountain', keys())).toBe(text);
+  });
+});
+
+describe('sceneKeyEdits', () => {
+  it('returns line-level edits in order, leaving keyed scenes alone', () => {
+    const text = 'INT. A\n\nx\n\nINT. B [[@s:b]]\n\nINT. C';
+    expect(sceneKeyEdits(text, 'fountain', keys())).toEqual([
+      { from: 0, to: 6, insert: 'INT. A [[@s:key-1]]' },
+      { from: 28, to: 34, insert: 'INT. C [[@s:key-2]]' },
+    ]);
   });
 });

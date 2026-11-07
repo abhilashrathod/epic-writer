@@ -83,7 +83,7 @@ docs/
   data-model.md
 ```
 
-Dependency direction: `apps/*` → `packages/*`. `core` may depend on `db` and `schemas` only. `fountain` and `schemas` depend on nothing internal. Nothing in `packages/` imports from `apps/`.
+Dependency direction: `apps/*` → `packages/*`. `core` may depend on `db`, `schemas` and `fountain` only (it derives scenes and counts on save). `fountain` and `schemas` depend on nothing internal. Nothing in `packages/` imports from `apps/`.
 
 ## Commands
 

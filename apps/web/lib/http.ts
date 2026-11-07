@@ -28,7 +28,7 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
     if (err instanceof HttpError)
       return Response.json({ error: err.message }, { status: err.status });
     if (err instanceof DomainError) {
-      return Response.json({ error: err.message }, { status: STATUS[err.code] });
+      return Response.json({ error: err.message, ...err.details }, { status: STATUS[err.code] });
     }
     if (err instanceof z.ZodError) {
       return Response.json(

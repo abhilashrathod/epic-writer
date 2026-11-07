@@ -74,3 +74,33 @@ export interface DocumentTextDto {
   text: string;
   version: number;
 }
+
+/** ~5 MB of text: far beyond a feature script, small enough to reject accidents. */
+const MAX_TEXT = 5_000_000;
+
+export const saveTextBody = z.object({
+  text: z.string().max(MAX_TEXT, 'This document is too large to save'),
+  baseVersion: z.number().int().min(0),
+});
+
+export const createSnapshotBody = z.object({
+  label: z.string().trim().max(200).default(''),
+  text: z.string().max(MAX_TEXT).optional(),
+});
+
+export const restoreBody = z.object({ baseVersion: z.number().int().min(0) });
+
+export interface VersionDto {
+  id: string;
+  reason: 'autosave-checkpoint' | 'manual' | 'before-ai' | 'commit' | 'import';
+  label: string;
+  version: number;
+  wordCount: number;
+  createdAt: string;
+}
+
+/** Body of a 409 from a save: the text and version currently on the server. */
+export interface SaveConflictDto {
+  error: string;
+  current: { text: string; version: number };
+}
