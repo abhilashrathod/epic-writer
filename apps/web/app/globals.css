@@ -4,3 +4,54 @@
 
 /* Shared components live outside this app, so Tailwind must scan them explicitly. */
 @source '../../../packages/ui';
+
+/* Screenplay page: Courier Prime 12pt, 10 characters per inch, so 60ch is the 6in text column
+   between the industry 1.5in left and 1in right margins. Indents follow the same grid. */
+.script .cm-content {
+  font-family: var(--type-script);
+  font-size: 12pt;
+  line-height: 1.25;
+  max-width: 60ch;
+}
+.script .cm-line {
+  padding: 0;
+}
+.script .cm-fountain-sceneHeading {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.script .cm-fountain-character {
+  padding-left: 22ch;
+}
+.script .cm-fountain-parenthetical {
+  padding-left: 16ch;
+  padding-right: 19ch;
+}
+.script .cm-fountain-dialogue {
+  padding-left: 10ch;
+  padding-right: 15ch;
+}
+.script .cm-fountain-transition {
+  text-align: right;
+}
+.script .cm-fountain-centered {
+  text-align: center;
+}
+.script .cm-fountain-lyrics {
+  font-style: italic;
+}
+.script .cm-fountain-section,
+.script .cm-fountain-synopsis,
+.script .cm-fountain-note,
+.script .cm-fountain-pageBreak {
+  color: var(--faint);
+}
+.prose .cm-content {
+  font-family: var(--type-ui);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+.cm-mention {
+  text-decoration: underline dotted var(--faint);
+  text-underline-offset: 3px;
+}

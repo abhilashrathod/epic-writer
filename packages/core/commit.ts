@@ -104,7 +104,7 @@ export async function commitInSession(
         { $set: { isHead: false, supersededSeq: seq } },
         { session },
       );
-      body = change.op === 'update' ? change.data : stripEnvelope(head);
+      body = change.op === 'update' ? change.data : versionBody(head);
     }
 
     await coll.insertOne(
@@ -169,8 +169,9 @@ function validate(input: CommitInput): void {
   }
 }
 
-function stripEnvelope(doc: VersionedEnvelope): object {
-  const body: Record<string, unknown> = { ...doc };
+/** A version's body without its envelope: the `data` an update change starts from. */
+export function versionBody<T extends VersionedEnvelope>(doc: T): Omit<T, keyof VersionedEnvelope> {
+  const body = { ...doc } as Record<string, unknown>;
   for (const k of ENVELOPE_KEYS) delete body[k];
-  return body;
+  return body as Omit<T, keyof VersionedEnvelope>;
 }

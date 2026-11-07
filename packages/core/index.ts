@@ -3,3 +3,5 @@ export * from './create-project';
 export * from './crypto/keys';
 export * from './errors';
 export * from './list-projects';
+export * from './defaults';
+export * from './works';

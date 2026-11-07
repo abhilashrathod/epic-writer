@@ -51,7 +51,7 @@ A pre-commit hook (`scripts/pre-commit.sh`, needs `gitleaks` installed) and a CI
 | Language        | TypeScript, `strict: true`, no `any` (use `unknown` and narrow)                          |
 | Package manager | pnpm workspaces                                                                          |
 | Web             | Next.js App Router, React, route handlers for the API                                    |
-| Editor          | CodeMirror 6, custom Lezer grammar for Fountain, Markdown mode for prose                 |
+| Editor          | CodeMirror 6; Fountain via the shared `classifyLine` (no Lezer grammar), Markdown mode for prose |
 | UI              | Tailwind (theme from CSS variables), Radix primitives                                    |
 | Data fetching   | TanStack Query                                                                           |
 | Validation      | Zod                                                                                      |
@@ -76,7 +76,7 @@ packages/
               calendar math, traits, continuity rules, key encryption
   db/         Mongo client, collection names and types, indexes, repositories
   schemas/    Zod schemas: API payloads, AI outputs, entity-field generator, env
-  fountain/   Lezer grammar, line classifier, markers, exporters
+  fountain/   line classifier, markers, scenes, exporters, CodeMirror extensions
   ai/         Provider adapter, prompts, context builder, cost tracking
   ui/         Design tokens (Inkwell, Sand), shared React components
 docs/
@@ -128,6 +128,15 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - Env is validated lazily (`getEnv()` in `apps/web/lib/server.ts`), so `next build` needs no secrets. Anything that reads the session calls `currentUser()`, which marks the route dynamic.
 - Route handlers wrap their body in `handle()` (`lib/http.ts`), which maps `DomainError`/Zod/401 errors to JSON `{ error }` and hides internals.
 - E2E: Playwright runs `next dev` with `E2E_AUTH_BYPASS=1`, which signs in a fixed test user. It is ignored when `NODE_ENV=production`. Stop `pnpm dev` before `pnpm test:e2e`; both use `apps/web/.next`.
+
+## Editor
+
+- Fountain has no Lezer grammar. One pure function, `classifyLine(text, prevType, nextLine)` in `packages/fountain`, decides every line type, for the editor and the server alike.
+- The editor keeps line types in a CodeMirror state field. Each edit re-classifies only the changed lines plus one line above and below, then continues downward only while types differ from before (a cue's type depends on its neighbours, dialogue on the cue above). Never re-classify the whole document per keystroke; decorations cover only the visible viewport.
+- Budget: decoration updates stay under 16 ms per keystroke on a 60-page (~3,000-line) script. A benchmark test enforces it.
+- Load CodeMirror language packs (`@codemirror/lang-markdown`) with a dynamic `import()` into a `Compartment`, only for documents that need them. A static import made Turbopack's dev server restart the shared entry chunk and reload pages in an endless loop.
+- Never change the React tree around the editor (e.g. returning different wrappers in focus mode); hide chrome with CSS instead. A remount throws away unsaved text.
+- If `pnpm dev` ever reloads pages in a loop ("HMR hash mismatch"), stop it and `rm -rf apps/web/.next`; the Turbopack cache can go stale.
 
 ## Code conventions
 

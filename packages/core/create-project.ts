@@ -2,6 +2,7 @@ import { ObjectId, type Db } from 'mongodb';
 import { v7 as uuidv7 } from 'uuid';
 import { branches, projects, type CalendarBody, type ProjectDoc } from '@epic/db';
 import { commitInSession } from './commit';
+import { emptyOverview, emptyVisual } from './defaults';
 import { Invalid } from './errors';
 
 export interface CreateProjectInput {
@@ -50,20 +51,8 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
             autoRun: false,
             monthlyCapMicros: 0,
           },
-          overview: {
-            logline: '',
-            tagline: '',
-            synopsisShort: '',
-            synopsisLong: '',
-            premise: '',
-            genres: [],
-            tone: '',
-            hook: '',
-            arc: '',
-            keyQuestions: [],
-            themeKeys: [],
-          },
-          visual: { palette: [], moodKeywords: [], moodboardAssetIds: [] },
+          overview: emptyOverview(),
+          visual: emptyVisual(),
           inspirations: [],
         },
         { session },

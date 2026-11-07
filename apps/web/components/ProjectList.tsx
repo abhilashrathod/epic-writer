@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import type { ProjectDto } from '@epic/schemas/api';
 import { Button, Card, Field } from '@epic/ui';
@@ -89,7 +90,9 @@ export function ProjectList() {
           {projects.map((p) => (
             <li key={p.id}>
               <Card className="flex items-baseline justify-between gap-4">
-                <span className="font-medium">{p.name}</span>
+                <Link href={`/projects/${p.id}`} className="font-medium hover:underline">
+                  {p.name}
+                </Link>
                 <span className="text-sm text-muted">
                   {dateFormat.format(new Date(p.createdAt))} · {p.commitCount}{' '}
                   {p.commitCount === 1 ? 'commit' : 'commits'}

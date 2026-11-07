@@ -4,10 +4,14 @@
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./codemirror": "./codemirror.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."
   },
-  "dependencies": {}
+  "dependencies": {
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15"
+  }
 }

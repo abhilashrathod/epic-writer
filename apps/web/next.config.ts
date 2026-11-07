@@ -7,7 +7,7 @@ const rootEnv = join(process.cwd(), '../../.env');
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 const config: NextConfig = {
-  transpilePackages: ['@epic/core', '@epic/db', '@epic/schemas', '@epic/ui'],
+  transpilePackages: ['@epic/core', '@epic/db', '@epic/fountain', '@epic/schemas', '@epic/ui'],
 };
 
 export default config;

@@ -5,9 +5,22 @@ const PORT = 3100;
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
+  // One worker: every spec shares the e2e database.
+  workers: 1,
   fullyParallel: false,
+  // The dev server compiles each route on first request, which can outlast the 5s default.
+  expect: { timeout: 15_000 },
   use: { baseURL: `http://localhost:${PORT}`, trace: 'retain-on-failure' },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    // The smoke test runs first: it expects the freshly emptied database.
+    { name: 'smoke', testMatch: 'smoke.spec.ts', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      testIgnore: 'smoke.spec.ts',
+      dependencies: ['smoke'],
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
   // Uses the app's .next folder, so stop `pnpm dev` before running e2e.
   webServer: {
     command: `pnpm exec next dev --port ${PORT}`,

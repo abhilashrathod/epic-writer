@@ -1,6 +1,14 @@
 import { ObjectId, type ClientSession, type Db } from 'mongodb';
 import { col } from './client';
-import type { BranchDoc, CommitDoc, JobDoc, JobType, ProjectDoc, UserDoc } from './collections';
+import type {
+  BranchDoc,
+  CommitDoc,
+  DocumentVersionDoc,
+  JobDoc,
+  JobType,
+  ProjectDoc,
+  UserDoc,
+} from './collections';
 
 /**
  * Scope for system rows that belong to no project (worker heartbeats). The data model has no
@@ -29,24 +37,34 @@ export const users = {
     p: { githubLogin: string; email: string; name: string },
   ): Promise<UserDoc> {
     const now = new Date();
-    const res = await col(db, 'users').findOneAndUpdate(
-      { githubLogin: p.githubLogin },
-      {
-        $set: { email: p.email, name: p.name, updatedAt: now },
-        $setOnInsert: {
-          githubLogin: p.githubLogin,
-          aiKeys: [],
-          preferences: {
-            skin: 'ink',
-            theme: 'system',
-            editorFont: 'Courier Prime',
-            defaultTemplate: 'blank',
+    const upsert = () =>
+      col(db, 'users').findOneAndUpdate(
+        { githubLogin: p.githubLogin },
+        {
+          $set: { email: p.email, name: p.name, updatedAt: now },
+          $setOnInsert: {
+            githubLogin: p.githubLogin,
+            aiKeys: [],
+            preferences: {
+              skin: 'ink',
+              theme: 'system',
+              editorFont: 'Courier Prime',
+              defaultTemplate: 'blank',
+            },
+            createdAt: now,
           },
-          createdAt: now,
         },
-      },
-      { upsert: true, returnDocument: 'after' },
-    );
+        { upsert: true, returnDocument: 'after' },
+      );
+    let res;
+    try {
+      res = await upsert();
+    } catch (err) {
+      // Two first requests can race to insert; the loser hits the unique index. By then the row
+      // exists, so a retry simply updates it.
+      if ((err as { code?: number }).code !== 11000) throw err;
+      res = await upsert();
+    }
     if (!res) throw new Error('user upsert returned nothing');
     return res;
   },
@@ -144,6 +162,34 @@ export const commits = {
       .toArray();
     return new Map(rows.map((r) => [r._id.toHexString(), r.n]));
   },
+};
+
+// ---------- documentVersions ----------
+
+export const documentVersions = {
+  /** The empty working copy every text document starts with. */
+  async createWorking(
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; documentKey: string },
+    opts: Opts = {},
+  ): Promise<DocumentVersionDoc> {
+    const full = stamp<DocumentVersionDoc>({
+      ...p,
+      kind: 'working',
+      version: 0,
+      text: '',
+      seq: null,
+      reason: 'manual',
+      label: '',
+      textHash: '',
+      wordCount: 0,
+      pageCount: 0,
+    });
+    await col(db, 'documentVersions').insertOne(full, opts);
+    return full;
+  },
+  findWorking: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
+    col(db, 'documentVersions').findOne({ ...p, kind: 'working' }),
 };
 
 // ---------- jobs ----------
