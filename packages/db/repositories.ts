@@ -1,12 +1,14 @@
 import { ObjectId, type ClientSession, type Db } from 'mongodb';
 import { col } from './client';
 import type {
+  AiUsageDoc,
   BranchDoc,
   CommitDoc,
   DocumentVersionDoc,
   JobDoc,
   JobType,
   ProjectDoc,
+  ProposalDoc,
   SceneDoc,
   UserDoc,
 } from './collections';
@@ -70,6 +72,10 @@ export const users = {
     return res;
   },
 
+  /** Replaces the user's stored AI keys (already encrypted by core). */
+  setAiKeys: (db: Db, id: ObjectId, aiKeys: UserDoc['aiKeys']) =>
+    col(db, 'users').updateOne({ _id: id }, { $set: { aiKeys, updatedAt: new Date() } }),
+
   updatePreferences: (db: Db, id: ObjectId, prefs: Partial<UserDoc['preferences']>) =>
     col(db, 'users').updateOne(
       { _id: id },
@@ -121,6 +127,36 @@ export const projects = {
       { $set: { ...fields, updatedAt: new Date() } },
       opts,
     ),
+};
+
+// ---------- project settings ----------
+
+export const projectSettings = {
+  setAiSettings: (db: Db, id: ObjectId, aiSettings: ProjectDoc['aiSettings']) =>
+    col(db, 'projects').updateOne({ _id: id }, { $set: { aiSettings, updatedAt: new Date() } }),
+};
+
+// ---------- aiUsage ----------
+
+export const aiUsage = {
+  async record(db: Db, doc: Omit<AiUsageDoc, '_id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+    await col(db, 'aiUsage').insertOne(stamp<AiUsageDoc>(doc));
+  },
+  /** Spend in micro-dollars since a date, in total and per task. */
+  async spend(
+    db: Db,
+    projectId: ObjectId,
+    since: Date,
+  ): Promise<{ total: number; byTask: Record<string, number> }> {
+    const rows = await col(db, 'aiUsage')
+      .aggregate<{ _id: string; micros: number }>([
+        { $match: { projectId, at: { $gte: since } } },
+        { $group: { _id: '$task', micros: { $sum: '$costMicros' } } },
+      ])
+      .toArray();
+    const byTask = Object.fromEntries(rows.map((r) => [r._id, r.micros]));
+    return { total: rows.reduce((n, r) => n + r.micros, 0), byTask };
+  },
 };
 
 // ---------- branches ----------
@@ -381,6 +417,8 @@ export const jobs = {
     return full;
   },
   findById: (db: Db, id: ObjectId) => col(db, 'jobs').findOne({ _id: id }),
+  findInProject: (db: Db, projectId: ObjectId, id: ObjectId) =>
+    col(db, 'jobs').findOne({ _id: id, projectId }),
 
   /**
    * Atomically claims the oldest runnable job: queued and due, or running with an expired lock
@@ -423,13 +461,20 @@ export const jobs = {
 
   // Finishing updates are guarded by lockedBy, so a worker whose lock expired and was
   // reclaimed elsewhere can't overwrite the new owner's result.
-  complete: (db: Db, id: ObjectId, workerId: string, output: Record<string, unknown>) =>
+  complete: (
+    db: Db,
+    id: ObjectId,
+    workerId: string,
+    output: Record<string, unknown>,
+    costMicros = 0,
+  ) =>
     col(db, 'jobs').updateOne(
       { _id: id, status: 'running', lockedBy: workerId },
       {
         $set: {
           status: 'done',
           output,
+          costMicros,
           error: null,
           lockedBy: null,
           lockedUntil: null,
@@ -487,5 +532,47 @@ export const jobs = {
       { sort: { updatedAt: -1 }, projection: { updatedAt: 1 } },
     );
     return row?.updatedAt ?? null;
+  },
+};
+
+// ---------- proposals ----------
+
+type Scope = { projectId: ObjectId; branchId: ObjectId };
+
+export const proposals = {
+  async insert(db: Db, doc: NewDoc<ProposalDoc>): Promise<ProposalDoc> {
+    const full = stamp<ProposalDoc>(doc);
+    await col(db, 'proposals').insertOne(full);
+    return full;
+  },
+  find: (db: Db, p: Scope & { id: ObjectId }, opts: Opts = {}) =>
+    col(db, 'proposals').findOne({ _id: p.id, projectId: p.projectId, branchId: p.branchId }, opts),
+  /** A document's proposals, newest first. */
+  listForDocument: (db: Db, p: Scope & { documentKey: string }) =>
+    col(db, 'proposals')
+      .find({ projectId: p.projectId, branchId: p.branchId, 'source.documentKey': p.documentKey })
+      .sort({ createdAt: -1 })
+      .toArray(),
+  /**
+   * Replaces the review state: change statuses and payloads, and the proposal's status. With
+   * `ifUpdatedAt`, only if nothing changed it since (matchedCount 0 otherwise).
+   */
+  setReview: (
+    db: Db,
+    p: Scope & { id: ObjectId },
+    fields: Pick<ProposalDoc, 'changes' | 'status'> & { appliedSeq?: number; ifUpdatedAt?: Date },
+    opts: Opts = {},
+  ) => {
+    const { ifUpdatedAt, ...set } = fields;
+    return col(db, 'proposals').updateOne(
+      {
+        _id: p.id,
+        projectId: p.projectId,
+        branchId: p.branchId,
+        ...(ifUpdatedAt && { updatedAt: ifUpdatedAt }),
+      },
+      { $set: { ...set, updatedAt: new Date() } },
+      opts,
+    );
   },
 };

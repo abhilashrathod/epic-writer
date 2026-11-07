@@ -9,7 +9,10 @@
     "./logger": "./logger.ts",
     "./api": "./api.ts",
     "./entity-fields": "./entity-fields.ts",
-    "./storylines": "./storylines.ts"
+    "./storylines": "./storylines.ts",
+    "./ai-ask": "./ai-ask.ts",
+    "./proposals": "./proposals.ts",
+    "./continuity": "./continuity.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

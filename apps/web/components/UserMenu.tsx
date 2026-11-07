@@ -1,6 +1,7 @@
 'use client';
 
 import * as Menu from '@radix-ui/react-dropdown-menu';
+import Link from 'next/link';
 import { useState } from 'react';
 import type { Skin, Theme } from '@epic/db';
 import { Button } from '@epic/ui';
@@ -55,7 +56,10 @@ export function UserMenu(props: { name: string; skin: Skin; theme: Theme }) {
               </Menu.RadioItem>
             ))}
           </Menu.RadioGroup>
-          <Menu.Item className={`${item} mt-1 text-muted`} onSelect={() => void signOutAction()}>
+          <Menu.Item asChild className={`${item} mt-1`}>
+            <Link href="/settings">Settings and AI keys</Link>
+          </Menu.Item>
+          <Menu.Item className={`${item} text-muted`} onSelect={() => void signOutAction()}>
             Sign out
           </Menu.Item>
         </Menu.Content>

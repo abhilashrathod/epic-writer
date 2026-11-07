@@ -1,20 +1,29 @@
-import type { Db } from 'mongodb';
+import type { Db, ObjectId } from 'mongodb';
 import { readHeadByKey, readHeads, type EntityDoc, type FactDoc, type LinkDoc } from '@epic/db';
 import { factInput } from '@epic/schemas/api';
 import { entityFieldsSchema } from '@epic/schemas/entity-fields';
-import { commit } from './commit';
+import { commit, type Change } from './commit';
+import type { PendingEntities } from './entities';
 import { Invalid, NotFound } from './errors';
 import type { ProjectContext } from './works';
 
 const author = (ctx: ProjectContext) => ({ kind: 'user' as const, userId: ctx.userId });
 
 /**
- * Records a change to a time-varying field (CX-3). The field must be marked "changes over time"
- * on the entry's type, and the value is validated like the field itself.
+ * The validated change recording a change to a time-varying field (CX-3), without committing it.
+ * The field must be marked "changes over time" on the entry's type, and the value is validated
+ * like the field itself. `pending` entries are created in the same commit.
  */
-export async function addFact(db: Db, ctx: ProjectContext, raw: unknown): Promise<string> {
+export async function factChange(
+  db: Db,
+  ctx: ProjectContext,
+  raw: unknown,
+  opts: { pending?: PendingEntities; proposalId?: ObjectId } = {},
+): Promise<{ change: Change; message: string }> {
   const input = factInput.parse(raw);
-  const entity = await readHeadByKey(db, 'entities', ctx.scope, input.entityKey);
+  const entity =
+    (await readHeadByKey(db, 'entities', ctx.scope, input.entityKey)) ??
+    opts.pending?.get(input.entityKey);
   if (!entity) throw new NotFound('Entry not found');
   const type = await readHeadByKey(db, 'entityTypes', ctx.scope, entity.typeKey);
   const field = type?.fields.find((f) => f.key === input.field);
@@ -40,9 +49,10 @@ export async function addFact(db: Db, ctx: ProjectContext, raw: unknown): Promis
     ...(input.causeKey ? [input.causeKey] : []),
   ];
   if (keys.length) {
-    const found = new Set(
-      (await readHeads(db, 'entities', ctx.scope, { key: { $in: keys } })).map((e) => e.key),
-    );
+    const found = new Set([
+      ...(await readHeads(db, 'entities', ctx.scope, { key: { $in: keys } })).map((e) => e.key),
+      ...(opts.pending?.keys() ?? []),
+    ]);
     const missing = keys.find((k) => !found.has(k));
     if (missing)
       throw new Invalid(
@@ -52,31 +62,36 @@ export async function addFact(db: Db, ctx: ProjectContext, raw: unknown): Promis
       );
   }
 
-  const { keys: created } = await commit(db, {
+  const change: Change = {
+    op: 'create',
+    collection: 'facts',
+    data: {
+      entityKey: entity.key,
+      field: field.key,
+      value: parsed.data[field.key],
+      storyTime: input.storyTime,
+      narrativeRefs: input.narrativeRefs,
+      causeKey: input.causeKey,
+      accountKey: null,
+      canonState: input.canonState,
+      sourceRef: null,
+      origin: opts.proposalId ? 'ai' : 'user',
+      proposalId: opts.proposalId ?? null,
+    },
+  };
+  return { change, message: `${entity.name}: ${field.label} changes` };
+}
+
+/** Records a change to a time-varying field (CX-3). */
+export async function addFact(db: Db, ctx: ProjectContext, raw: unknown): Promise<string> {
+  const { change, message } = await factChange(db, ctx, raw);
+  const { keys } = await commit(db, {
     ...ctx.scope,
-    message: `${entity.name}: ${field.label} changes`,
+    message,
     author: author(ctx),
-    changes: [
-      {
-        op: 'create',
-        collection: 'facts',
-        data: {
-          entityKey: entity.key,
-          field: field.key,
-          value: parsed.data[field.key],
-          storyTime: input.storyTime,
-          narrativeRefs: input.narrativeRefs,
-          causeKey: input.causeKey,
-          accountKey: null,
-          canonState: input.canonState,
-          sourceRef: null,
-          origin: 'user',
-          proposalId: null,
-        },
-      },
-    ],
+    changes: [change],
   });
-  return created[0]!;
+  return keys[0]!;
 }
 
 export async function deleteFact(db: Db, ctx: ProjectContext, key: string): Promise<void> {

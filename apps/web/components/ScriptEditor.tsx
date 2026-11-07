@@ -16,6 +16,7 @@ import {
 } from '@epic/fountain';
 import { fountain, hideMarkers } from '@epic/fountain/codemirror';
 import { mentionCompletions, type MentionCandidate } from '@epic/fountain/mentions';
+import { issueUnderlines, setUnderlines, type Underline } from '../lib/issue-underlines';
 
 const theme = EditorView.theme({
   '&': { color: 'var(--ink)', backgroundColor: 'transparent' },
@@ -68,6 +69,8 @@ export interface EditorHandle {
   replaceRange(from: number, to: number, text: string): void;
   /** Applies bookkeeping edits such as scene key markers, outside undo history. */
   applyEdits(edits: TextEdit[]): void;
+  /** Shows continuity issues as underlines (AI-7). */
+  setUnderlines(underlines: Underline[]): void;
 }
 
 interface Props {
@@ -130,6 +133,7 @@ export function ScriptEditor(props: Props) {
           format === 'fountain'
             ? fountain()
             : [proseLanguage.of([]), syntaxHighlighting(proseHighlight), hideMarkers],
+          issueUnderlines,
           autocompletion({
             override: [mentionCompletions(() => callbacks.current.getCandidates?.() ?? [], format)],
             defaultKeymap: false,
@@ -192,6 +196,7 @@ export function ScriptEditor(props: Props) {
         }),
       applyEdits: (edits) =>
         view.dispatch({ changes: edits, annotations: Transaction.addToHistory.of(false) }),
+      setUnderlines: (u) => view.dispatch({ effects: setUnderlines.of(u) }),
     });
     callbacks.current.onJumpHandler((pos) => {
       view.dispatch({

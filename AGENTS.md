@@ -146,6 +146,16 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - The `born` trait reads birth and death from date fields keyed `born`/`died`, else the type's first and second date fields. Ages come from `ageAt` and the project calendar.
 - Views fetch `GET /api/projects/:id/world` (`useWorld`) and resolve client-side against `useWorkspace().asOf`. Opening an episode moves "as of" to it (its `storyTime`, its work, the end of its `orderPath`) unless pinned (WK-7).
 
+## AI
+
+- `packages/ai` wraps the Vercel AI SDK: `languageModel(provider, modelId, apiKey, mock)` and `generateStructured({ model, modelId, schema, system, prompt })`, which validates with Zod, retries once with the errors, then throws `AiOutputError` (rule 8). Prices live in `pricing.ts` (micro-dollars per token); unknown models report cost as unknown. Browser code imports only `@epic/ai/defaults` and `@epic/ai/pricing`.
+- The web app queues AI work with `POST /api/projects/:id/jobs` (`useAiJob`), after core's `enqueueAiJob` checks the owner's key and the monthly cap. Job types: `extract`, `continuity`, `ask` (usage task `chat`).
+- Worker handlers live in `apps/worker/handlers/<task>.ts` and start with `prepareAi(db, job, task, keySecret, mock)`, which returns the project context, the model and `record(usage, promptVersion)`. A handler returns its output with `costMicros` (null cost → `costKnown: false`); the UI shows it with `RunCost` after every run (AI-10).
+- Every handler supplies a deterministic mock responder. With `AI_MOCK=1` (never in production) all providers answer from it; tests and e2e use this and never call a real provider. The e2e setup runs the worker with `AI_MOCK=1`.
+- Extraction (`extract` job) writes one `proposals` row per run. Identity matching (AI-5) is code (`core/identity.ts`); entries a proposal creates are `new:<n>` refs until applied. `applyProposal` builds accepted changes with the same builders as hand edits (`entityChange`, `linkChange`, `factChange`) and commits them as one commit (author `ai`).
+- Prompts carry a `PROMPT_VERSION` constant, recorded in `aiUsage`. AI context is built from the codex as of the relevant point and excludes scrapped data (rule 9).
+- Failures a retry can't fix (`AiOutputError`, `Invalid`, `NotFound`, `Forbidden`) fail the job at once; network and rate-limit errors retry with backoff.
+
 ## Code conventions
 
 - Named exports only, except where Next.js requires a default export.

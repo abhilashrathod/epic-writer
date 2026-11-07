@@ -52,7 +52,7 @@ test('as of: episode story time, recorded changes, ages and unborn entries (GR-5
   await expect(asOf).toContainText(`The Series · ${title}`);
 
   // Ages and unborn entries as of year 20 (GR-6).
-  await page.getByRole('link', { name: 'Codex' }).click();
+  await page.getByRole('link', { name: 'Codex', exact: true }).click();
   const grid = page.getByRole('region', { name: 'Entries' });
   await expect(grid.getByRole('button', { name: /Pandu/ })).toContainText('Age 10');
   const kunti = grid.getByRole('button', { name: /Kunti/ });

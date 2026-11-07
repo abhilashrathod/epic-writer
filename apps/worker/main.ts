@@ -17,7 +17,10 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
 
 logger.info('worker started', { workerId: env.WORKER_ID });
 try {
-  await runLoop({ db, workerId: env.WORKER_ID, handlers }, stop.signal);
+  await runLoop(
+    { db, workerId: env.WORKER_ID, handlers, keySecret: env.KEY_ENCRYPTION_SECRET },
+    stop.signal,
+  );
 } finally {
   await getMongoClient(env.MONGODB_URI).close();
   logger.info('worker stopped');

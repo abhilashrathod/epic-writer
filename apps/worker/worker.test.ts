@@ -64,7 +64,11 @@ describe('worker', () => {
   });
 
   it('reclaims a job whose lock expired, and fails it if that was the last attempt', async () => {
-    const stale = { status: 'running' as const, lockedBy: 'dead', lockedUntil: new Date(Date.now() - 1) };
+    const stale = {
+      status: 'running' as const,
+      lockedBy: 'dead',
+      lockedUntil: new Date(Date.now() - 1),
+    };
     const a = await enqueue();
     const b = await enqueue();
     await col(db, 'jobs').updateOne({ _id: a._id }, { $set: { ...stale, attempts: 1 } });

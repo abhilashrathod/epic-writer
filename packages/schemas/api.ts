@@ -342,3 +342,55 @@ export interface WorldDto {
   links: LinkDto[];
   facts: FactDto[];
 }
+
+export const AI_PROVIDERS = ['anthropic', 'openai', 'openrouter'] as const;
+
+export const aiKeyInput = z.object({
+  provider: z.enum(AI_PROVIDERS),
+  key: z.string().trim().min(8, 'Paste the whole API key').max(500),
+  label: z.string().trim().max(60).default(''),
+});
+
+export interface AiKeyDto {
+  provider: (typeof AI_PROVIDERS)[number];
+  label: string;
+  last4: string;
+}
+
+const modelId = z.string().trim().max(120).default('');
+export const aiSettingsInput = z.object({
+  provider: z.enum(AI_PROVIDERS),
+  /** Blank means "use the suggested model for this provider". */
+  models: z.object({
+    extraction: modelId,
+    continuity: modelId,
+    suggestions: modelId,
+    chat: modelId,
+    embedding: modelId,
+  }),
+  /** 0 means no cap. */
+  monthlyCapMicros: z.number().int().min(0).max(1_000_000_000),
+});
+
+export interface AiSettingsDto extends z.infer<typeof aiSettingsInput> {
+  /** Providers the project owner has a key for. */
+  keyProviders: (typeof AI_PROVIDERS)[number][];
+  spend: { monthTotal: number; byTask: Record<string, number> };
+}
+
+export const AI_JOB_TYPES = ['extract', 'continuity', 'ask'] as const;
+
+export const enqueueJobBody = z.object({
+  type: z.enum(AI_JOB_TYPES),
+  input: z.record(z.string(), z.unknown()).default({}),
+});
+
+export interface JobDto {
+  id: string;
+  type: string;
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  progress: { done: number; total: number };
+  output: Record<string, unknown>;
+  costMicros: number;
+  error: string | null;
+}

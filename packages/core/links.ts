@@ -1,7 +1,8 @@
-import type { Db } from 'mongodb';
+import type { Db, ObjectId } from 'mongodb';
 import { readHeadByKey, readHeads, scenes as sceneRows, type LinkTypeDoc } from '@epic/db';
 import { linkInput, linkTypeInput, type ConnectionDto, type RelationsDto } from '@epic/schemas/api';
-import { commit } from './commit';
+import { commit, type Change } from './commit';
+import type { PendingEntities } from './entities';
 import { Conflict, Invalid, NotFound } from './errors';
 import type { ProjectContext } from './works';
 
@@ -33,15 +34,25 @@ function allows(t: LinkTypeDoc, fromType: string, toType: string): boolean {
   return ok(fromType, toType) || (t.symmetric && ok(toType, fromType));
 }
 
-/** Connects two entries. The link's kind is copied from its type, as the data model requires. */
-export async function createLink(db: Db, ctx: ProjectContext, raw: unknown): Promise<string> {
+/**
+ * The validated change that connects two entries, without committing it. The link's kind is copied
+ * from its type, as the data model requires. `pending` entries are created in the same commit.
+ */
+export async function linkChange(
+  db: Db,
+  ctx: ProjectContext,
+  raw: unknown,
+  opts: { pending?: PendingEntities; proposalId?: ObjectId } = {},
+): Promise<{ change: Change; message: string }> {
   const input = linkInput.parse(raw);
   if (input.fromKey === input.toKey) throw new Invalid('An entry can’t be connected to itself');
-  const [type, from, to] = await Promise.all([
+  const [type, fromRow, toRow] = await Promise.all([
     readHeadByKey(db, 'linkTypes', ctx.scope, input.typeKey),
     readHeadByKey(db, 'entities', ctx.scope, input.fromKey),
     readHeadByKey(db, 'entities', ctx.scope, input.toKey),
   ]);
+  const from = fromRow ?? opts.pending?.get(input.fromKey);
+  const to = toRow ?? opts.pending?.get(input.toKey);
   if (!type) throw new Invalid('Pick an existing kind of connection');
   if (!from || !to) throw new NotFound('Entry not found');
   if (!allows(type, from.typeKey, to.typeKey))
@@ -54,32 +65,36 @@ export async function createLink(db: Db, ctx: ProjectContext, raw: unknown): Pro
     ],
   });
   if (dupe.length) throw new Conflict(`"${from.name}" is already ${type.label} "${to.name}"`);
+  const change: Change = {
+    op: 'create',
+    collection: 'links',
+    data: {
+      fromKey: from.key,
+      toKey: to.key,
+      typeKey: type.key,
+      kind: type.kind,
+      fields: {},
+      storyTime: input.storyTime,
+      narrativeRefs: input.narrativeRefs,
+      accountKey: null,
+      canonState: input.canonState,
+      weight: 1,
+      note: input.note,
+      sourceRef: null,
+      origin: opts.proposalId ? 'ai' : 'user',
+      proposalId: opts.proposalId ?? null,
+    },
+  };
+  return { change, message: `Connect "${from.name}" ${type.label} "${to.name}"` };
+}
+
+export async function createLink(db: Db, ctx: ProjectContext, raw: unknown): Promise<string> {
+  const { change, message } = await linkChange(db, ctx, raw);
   const { keys } = await commit(db, {
     ...ctx.scope,
-    message: `Connect "${from.name}" ${type.label} "${to.name}"`,
+    message,
     author: author(ctx),
-    changes: [
-      {
-        op: 'create',
-        collection: 'links',
-        data: {
-          fromKey: from.key,
-          toKey: to.key,
-          typeKey: type.key,
-          kind: type.kind,
-          fields: {},
-          storyTime: input.storyTime,
-          narrativeRefs: input.narrativeRefs,
-          accountKey: null,
-          canonState: input.canonState,
-          weight: 1,
-          note: input.note,
-          sourceRef: null,
-          origin: 'user',
-          proposalId: null,
-        },
-      },
-    ],
+    changes: [change],
   });
   return keys[0]!;
 }

@@ -37,6 +37,8 @@ export function ProjectShell({
             ['graph', 'Family trees and web'],
             ['timeline', 'Timeline'],
             ['storylines', 'Storylines'],
+            ['ask', 'Ask the codex'],
+            ['settings', 'AI settings'],
           ].map(([path, label]) => (
             <Link
               key={path}

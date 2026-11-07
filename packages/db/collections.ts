@@ -196,7 +196,7 @@ export type CommitDoc = BranchScoped<{
 }>;
 
 export type JobType =
-  'extract' | 'continuity' | 'embed' | 'import' | 'export' | 'merge-preview' | 'noop';
+  'extract' | 'continuity' | 'ask' | 'embed' | 'import' | 'export' | 'merge-preview' | 'noop';
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 
 export type JobDoc = BranchScoped<{

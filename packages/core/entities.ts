@@ -1,4 +1,4 @@
-import type { Db } from 'mongodb';
+import type { Db, ObjectId } from 'mongodb';
 import {
   documentVersions,
   readHeadByKey,
@@ -38,11 +38,20 @@ function uniqueSlug(name: string, taken: Set<string>): string {
 const isEmpty = (v: unknown) =>
   v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
 
+/** Entries created earlier in the same commit (an accepted proposal), which references may name. */
+export type PendingEntities = Map<string, { key: string; typeKey: string; name: string }>;
+
 /**
  * Validates an entry against its type (AGENTS.md rule 8) and checks that every entry it references
  * exists and has an allowed type. Empty optional values are dropped rather than stored.
  */
-async function validate(db: Db, ctx: ProjectContext, raw: unknown, selfKey?: string) {
+async function validate(
+  db: Db,
+  ctx: ProjectContext,
+  raw: unknown,
+  selfKey?: string,
+  pending?: PendingEntities,
+) {
   const input = entityInput.parse(raw);
   const type = await readHeadByKey(db, 'entityTypes', ctx.scope, input.typeKey);
   if (!type) throw new Invalid('Pick an existing entry type');
@@ -74,7 +83,7 @@ async function validate(db: Db, ctx: ProjectContext, raw: unknown, selfKey?: str
       ),
     );
     for (const { f, key } of refs) {
-      const target = found.get(key);
+      const target = found.get(key) ?? pending?.get(key);
       if (!target || key === selfKey)
         throw new Invalid(`"${f.label}" points to an entry that doesn't exist`);
       if (f.refTypeKeys.length && !f.refTypeKeys.includes(target.typeKey)) {
@@ -85,9 +94,8 @@ async function validate(db: Db, ctx: ProjectContext, raw: unknown, selfKey?: str
   return { input: { ...input, fields }, type };
 }
 
-async function takenSlugs(db: Db, ctx: ProjectContext, exceptKey?: string): Promise<Set<string>> {
-  const all = await readHeads(db, 'entities', ctx.scope);
-  return new Set(all.filter((e) => e.key !== exceptKey).map((e) => e.slug));
+export async function takenSlugs(db: Db, ctx: ProjectContext): Promise<Set<string>> {
+  return new Set((await readHeads(db, 'entities', ctx.scope)).map((e) => e.slug));
 }
 
 const PROMINENCE_RANK = new Map<string, number>(PROMINENCE.map((p, i) => [p, i]));
@@ -141,6 +149,7 @@ function body(
   input: EntityInput & { fields: Record<string, unknown> },
   slug: string,
   prev?: EntityDoc,
+  proposalId: ObjectId | null = null,
 ) {
   return {
     ...(prev
@@ -149,8 +158,8 @@ function body(
           images: [],
           storyTime: null,
           firstAppearances: [],
-          origin: 'user' as const,
-          proposalId: null,
+          origin: proposalId ? ('ai' as const) : ('user' as const),
+          proposalId,
         }),
     typeKey: input.typeKey,
     name: input.name,
@@ -164,14 +173,43 @@ function body(
   };
 }
 
+/**
+ * The validated change that creates an entry, or replaces `prev`, without committing it. Shared by
+ * writer edits and accepted proposals. `taken` holds slugs in use; the new slug is added to it.
+ */
+export async function entityChange(
+  db: Db,
+  ctx: ProjectContext,
+  raw: unknown,
+  opts: {
+    taken: Set<string>;
+    prev?: EntityDoc;
+    key?: string;
+    pending?: PendingEntities;
+    proposalId?: ObjectId;
+  },
+): Promise<{ change: Change; name: string; typeName: string }> {
+  const { prev } = opts;
+  const { input, type } = await validate(db, ctx, raw, prev?.key ?? opts.key, opts.pending);
+  if (prev) opts.taken.delete(prev.slug);
+  const slug = prev && input.name === prev.name ? prev.slug : uniqueSlug(input.name, opts.taken);
+  opts.taken.add(slug);
+  const data = body(input, slug, prev, opts.proposalId ?? null);
+  const change: Change = prev
+    ? { op: 'update', collection: 'entities', key: prev.key, data }
+    : { op: 'create', collection: 'entities', key: opts.key, data };
+  return { change, name: input.name, typeName: type.name };
+}
+
 export async function createEntity(db: Db, ctx: ProjectContext, raw: unknown): Promise<string> {
-  const { input, type } = await validate(db, ctx, raw);
-  const slug = uniqueSlug(input.name, await takenSlugs(db, ctx));
+  const { change, name, typeName } = await entityChange(db, ctx, raw, {
+    taken: await takenSlugs(db, ctx),
+  });
   const { keys } = await commit(db, {
     ...ctx.scope,
-    message: `Add ${type.name.toLowerCase()} "${input.name}"`,
+    message: `Add ${typeName.toLowerCase()} "${name}"`,
     author: author(ctx),
-    changes: [{ op: 'create', collection: 'entities', data: body(input, slug) }],
+    changes: [change],
   });
   return keys[0]!;
 }
@@ -185,14 +223,15 @@ export async function updateEntity(
 ): Promise<void> {
   const prev = await readHeadByKey(db, 'entities', ctx.scope, key);
   if (!prev) throw new NotFound('Entry not found');
-  const { input } = await validate(db, ctx, raw, key);
-  const slug =
-    input.name === prev.name ? prev.slug : uniqueSlug(input.name, await takenSlugs(db, ctx, key));
+  const { change, name } = await entityChange(db, ctx, raw, {
+    taken: await takenSlugs(db, ctx),
+    prev,
+  });
   await commit(db, {
     ...ctx.scope,
-    message: `Edit "${input.name}"`,
+    message: `Edit "${name}"`,
     author: author(ctx),
-    changes: [{ op: 'update', collection: 'entities', key, data: body(input, slug, prev) }],
+    changes: [change],
   });
 }
 

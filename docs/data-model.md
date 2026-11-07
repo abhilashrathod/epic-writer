@@ -48,7 +48,7 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 
 **commits** (plain): `projectId, branchId, seq (unique per project), parentSeqs[], message, author{ kind: 'user'|'ai'|'import', userId, proposalId }, auto, stats{ entities, links, facts, documents, other }`.
 
-**jobs** (plain): `projectId, branchId, type: 'extract'|'continuity'|'embed'|'import'|'export'|'merge-preview'|'noop', status: 'queued'|'running'|'done'|'failed'|'cancelled', attempts, lockedBy, lockedUntil, runAfter, progress{ done, total }, input{}, output{}, costMicros, error`.
+**jobs** (plain): `projectId, branchId, type: 'extract'|'continuity'|'ask'|'embed'|'import'|'export'|'merge-preview'|'noop', status: 'queued'|'running'|'done'|'failed'|'cancelled', attempts, lockedBy, lockedUntil, runAfter, progress{ done, total }, input{}, output{}, costMicros, error`.
 
 ## World (all versioned)
 

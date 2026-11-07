@@ -1,9 +1,14 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Db } from 'mongodb';
 import type { JobDoc, JobType } from '@epic/db';
+import { ask } from './handlers/ask';
+import { extract } from './handlers/extract';
+import { continuityHandler } from './handlers/continuity';
 
 export interface HandlerContext {
   db: Db;
+  /** KEY_ENCRYPTION_SECRET, for decrypting the project owner's AI key. */
+  keySecret: string;
 }
 
 /** Runs one job and returns its output. Throwing marks the attempt failed. */
@@ -16,4 +21,7 @@ export const handlers: Handlers = {
     await sleep(500);
     return { ok: true };
   },
+  ask,
+  extract,
+  continuity: continuityHandler,
 };

@@ -7,9 +7,12 @@ import type { MentionCandidate } from '@epic/fountain/mentions';
 import type { DocumentTextDto } from '@epic/schemas/api';
 import { Button } from '@epic/ui';
 import { api } from '../lib/api-client';
+import { useContinuity } from '../lib/use-continuity';
 import { useDocumentSync, type SaveStatus } from '../lib/use-document-sync';
 import { useEntities, useTypes } from '../lib/use-types';
 import { EntryForm } from './codex/EntryForm';
+import { ExtractPanel } from './ExtractPanel';
+import { ContinuityPanel } from './ContinuityPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { MentionCard } from './MentionCard';
 import { ScriptEditor, type EditorHandle, type TextSelection } from './ScriptEditor';
@@ -73,12 +76,22 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
     initial: { text, version: data.version },
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [showExtract, setShowExtract] = useState(false);
   const meta = useTypes(projectId);
   const entities = useEntities(projectId);
   const editor = useRef<EditorHandle | null>(null);
   const [selection, setSelection] = useState<TextSelection | null>(null);
   const [adding, setAdding] = useState<TextSelection | null>(null);
   const [card, setCard] = useState<{ key: string; rect: DOMRect } | null>(null);
+  const [showIssues, setShowIssues] = useState(false);
+  const continuity = useContinuity({
+    projectId,
+    documentKey: document.key,
+    editor,
+    save: sync.save,
+    saved: sync.status === 'saved',
+  });
+  const openIssues = continuity.issues.filter((i) => i.status === 'open').length;
 
   // Read by autocomplete when it opens; a ref keeps the editor from being rebuilt as entries change.
   const candidates = useRef<MentionCandidate[]>([]);
@@ -166,6 +179,16 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
               }}
             >
               Add to codex
+            </Button>
+          )}
+          {!focus && (
+            <Button onClick={() => setShowExtract((x) => !x)} aria-expanded={showExtract}>
+              Extract
+            </Button>
+          )}
+          {!focus && (
+            <Button onClick={() => setShowIssues((v) => !v)} aria-expanded={showIssues}>
+              Continuity{openIssues > 0 && ` (${openIssues})`}
             </Button>
           )}
           {!focus && (
@@ -268,6 +291,22 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
               }}
             />
           </aside>
+        )}
+        {showExtract && !focus && (
+          <ExtractPanel
+            documentKey={document.key}
+            save={sync.save}
+            onClose={() => setShowExtract(false)}
+          />
+        )}
+        {showIssues && !focus && (
+          <ContinuityPanel
+            projectId={projectId}
+            continuity={continuity}
+            entries={entities.data ?? []}
+            onJump={jumpTo}
+            onClose={() => setShowIssues(false)}
+          />
         )}
         {showHistory && !focus && (
           <HistoryPanel

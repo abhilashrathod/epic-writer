@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ObjectId, type Db } from 'mongodb';
 import {
+  continuityIssues,
   documentVersions,
   readHeadByKey,
   scenes,
@@ -9,6 +10,7 @@ import {
   type SceneDoc,
 } from '@epic/db';
 import { classifyLines, extractScenes, findMarkers, textStats } from '@epic/fountain';
+import { markStaleOnSave } from './continuity';
 import { Conflict, Invalid, NotFound } from './errors';
 import type { ProjectContext } from './works';
 
@@ -101,6 +103,11 @@ export async function saveWorkingText(
   const session = db.client.startSession();
   try {
     return await session.withTransaction(async () => {
+      // Issues follow the text without re-running checks; the old text is read only when needed.
+      const issues = await continuityIssues.listForDocument(db, where, undefined, { session });
+      const before = issues.length
+        ? await documentVersions.findWorking(db, where, { session })
+        : null;
       const saved = await documentVersions.saveWorking(
         db,
         { ...where, baseVersion: input.baseVersion },
@@ -114,6 +121,7 @@ export async function saveWorkingText(
         });
       }
       await scenes.replaceForDocument(db, where, deriveScenes(ctx, doc, input.text), { session });
+      if (before) await markStaleOnSave(db, issues, before.text, input.text, { session });
 
       const last = await documentVersions.latestSnapshot(db, where, { session });
       const due = !last || Date.now() - last.createdAt.getTime() >= CHECKPOINT_EVERY_MS;

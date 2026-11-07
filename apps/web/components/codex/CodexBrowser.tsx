@@ -137,6 +137,12 @@ export function CodexBrowser() {
         >
           Edit entry types
         </Link>
+        <Link
+          href={`/projects/${projectId}/ask`}
+          className="px-2 text-sm text-muted hover:text-ink"
+        >
+          Ask the codex
+        </Link>
       </nav>
 
       <section aria-label="Entries" className="flex min-w-0 flex-1 flex-col gap-4">
