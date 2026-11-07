@@ -31,6 +31,16 @@ describe('calendar', () => {
     expect(yearLength(twoEras)).toBe(90);
   });
 
+  it('places a second calendar on the shared timeline with its epoch offset (PR-3)', () => {
+    const later = { ...twoEras, epochOffset: 90 };
+    // Story day 90 is this calendar's own day 0: day 1 of year 1 AC.
+    expect(fromDayIndex(later, 90)).toEqual({ eraIndex: 1, year: 1, month: 1, day: 1 });
+    expect(formatStoryTime(later, { start: 90, end: null, precision: 'day' })).toBe(
+      formatStoryTime(twoEras, { start: 0, end: null, precision: 'day' }),
+    );
+    for (let d = -200; d <= 200; d++) expect(toDayIndex(later, fromDayIndex(later, d))).toBe(d);
+  });
+
   it('round-trips every day across a backward and a forward era', () => {
     for (let d = -400; d <= 400; d++)
       expect(toDayIndex(twoEras, fromDayIndex(twoEras, d)), `day ${d}`).toBe(d);

@@ -1,4 +1,4 @@
-import type { Db, ObjectId } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 import {
   documentVersions,
   readHeadByKey,
@@ -8,6 +8,7 @@ import {
 } from '@epic/db';
 import { entityInput, PROMINENCE, type EntityInput } from '@epic/schemas/api';
 import { entityFieldsSchema } from '@epic/schemas/entity-fields';
+import { requireImageAssets } from './assets';
 import { commit, versionBody, type Change } from './commit';
 import { Invalid, NotFound } from './errors';
 import { saveWorkingText } from './save';
@@ -68,6 +69,13 @@ async function validate(
     throw new Invalid(issue.message.includes(label) ? issue.message : `${label}: ${issue.message}`);
   }
   const fields = parsed.data as Record<string, unknown>;
+
+  // Entry images and image fields must be uploads of this project.
+  const imageFieldIds = type.fields.flatMap((f) =>
+    f.kind === 'image' && typeof fields[f.key] === 'string' ? [fields[f.key] as string] : [],
+  );
+  const imageIds = [...imageFieldIds, ...(input.images ?? []).map((i) => i.assetId)];
+  if (imageIds.length) await requireImageAssets(db, ctx, imageIds);
 
   const refs = type.fields.flatMap((f) => {
     const v = fields[f.key];
@@ -170,7 +178,23 @@ function body(
     canonState: input.canonState,
     tags: [...new Set(input.tags)],
     fields: input.fields,
+    images: input.images ? entryImages(input.images) : (prev?.images ?? []),
   };
+}
+
+/** One image per asset; exactly one primary when there are any (the first, unless one is marked). */
+function entryImages(list: NonNullable<EntityInput['images']>): EntityDoc['images'] {
+  const seen = new Set<string>();
+  const unique = list.filter((i) => !seen.has(i.assetId) && seen.add(i.assetId));
+  const primary = Math.max(
+    0,
+    unique.findIndex((i) => i.primary),
+  );
+  return unique.map((i, n) => ({
+    assetId: new ObjectId(i.assetId),
+    caption: i.caption,
+    primary: n === primary,
+  }));
 }
 
 /**

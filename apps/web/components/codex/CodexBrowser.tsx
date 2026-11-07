@@ -8,6 +8,7 @@ import type { EntityDto } from '@epic/schemas/api';
 import { Button, Icon, TYPE_TEXT, focusRing } from '@epic/ui';
 import { useEntities, useTypes } from '../../lib/use-types';
 import { useWorkspace } from '../Workspace';
+import { primaryImage } from './EntryImages';
 import { EntryCard } from './EntryCard';
 import { EntryDetail } from './EntryDetail';
 import { EntryForm } from './EntryForm';
@@ -196,6 +197,7 @@ export function CodexBrowser() {
                     type={types.find((t) => t.key === e.typeKey)}
                     selected={openKey === e.key}
                     life={lifeOf(e)}
+                    imageUrl={primaryImage(projectId, e)}
                   />
                 </button>
               </li>

@@ -8,6 +8,7 @@ import { api } from '../../lib/api-client';
 import { entitiesKey, type TypesData } from '../../lib/use-types';
 import { worldKey } from '../../lib/use-world';
 import { EntryCard } from './EntryCard';
+import { EntryImages } from './EntryImages';
 import { FieldInput } from './FieldInput';
 
 const select = `h-10 rounded-lg bg-sunk px-3 text-ink ${focusRing}`;
@@ -161,6 +162,12 @@ export function EntryForm(props: {
         hint="Separate tags with commas"
         value={tags}
         onChange={(e) => setTags(e.target.value)}
+      />
+
+      <EntryImages
+        projectId={props.projectId}
+        images={draft.images ?? []}
+        onChange={(images) => set({ images })}
       />
 
       {type?.fields.map((f) => (

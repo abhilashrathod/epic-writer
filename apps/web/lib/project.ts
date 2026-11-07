@@ -79,6 +79,7 @@ export const toEntityDto = (e: EntityDoc): EntityDto => ({
   canonState: e.canonState,
   tags: e.tags,
   fields: e.fields,
+  images: e.images.map((i) => ({ ...i, assetId: i.assetId.toHexString() })),
   updatedAt: e.createdAt.toISOString(),
 });
 

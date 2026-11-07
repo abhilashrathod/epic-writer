@@ -47,6 +47,7 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
           overview: emptyOverview(),
           visual: emptyVisual(),
           inspirations: [],
+          archivedAt: null,
         },
         { session },
       );

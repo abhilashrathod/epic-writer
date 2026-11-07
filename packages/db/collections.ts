@@ -136,6 +136,8 @@ export type ProjectDoc = Plain<{
   overview: Overview;
   visual: Visual;
   inspirations: Inspiration[];
+  /** Set when archived (PR-1): hidden from the main project list until restored. */
+  archivedAt: Date | null;
 }>;
 
 export type TemplateDoc = Plain<{

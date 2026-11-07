@@ -59,7 +59,7 @@ A pre-commit hook (`scripts/pre-commit.sh`, needs `gitleaks` installed) and a CI
 | Jobs            | Worker process polling the `jobs` collection (no Redis)                                  |
 | AI              | Vercel AI SDK with Anthropic, OpenAI, OpenRouter providers                               |
 | Graph views     | React Flow + elkjs                                                                       |
-| Files           | Cloudflare R2 via presigned URLs                                                         |
+| Files           | Cloudflare R2 via presigned URLs, signed with `aws4fetch` (no AWS SDK)                    |
 | Auth            | Auth.js, GitHub provider, allowlisted to one login                                       |
 | Tests           | Vitest (unit/integration), Playwright (editor and UI flows)                              |
 
@@ -204,6 +204,13 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - Fountain/Markdown export (IO-3): `core.exportDocumentText` strips identity markers with `stripMarkers`; Fountain files start with a `Title:` page so they re-import under the same title.
 - Backups (IO-7): `core.exportProject` returns every row of every project-scoped collection (`PROJECT_COLLECTIONS` in `packages/db/backup.ts`), all versions, as EJSON. It never includes `users` (AI keys) or `templates`; only the owner's name. Download it from project settings.
 - Nightly backups: the worker enqueues one `export` job per project per 24h (checked every 10 minutes) and writes `BACKUP_DIR/<projectId>/<YYYY-MM-DD>.json.gz`, keeping the newest 14. `BACKUP_DIR` must be absolute and outside the repo; unset turns nightly backups off. Never commit backups: this repo is public.
+
+## Uploads and project settings
+
+- Images go browser → R2 directly: `POST /assets/uploads` returns a signed PUT URL, the browser uploads, then `POST /assets` checks the object (`core.finishImageUpload`) and records an `assets` row. Pages show images through `/api/projects/:id/assets/:assetId`, which checks access and redirects to a signed GET URL; the bucket stays private.
+- `core/storage.ts` holds the `Storage` interface: `r2Storage` in real runs, `diskStorage` (served by `/api/e2e-storage`) when `E2E_AUTH_BYPASS` is on. Tests never touch the real bucket. Get it with `getStorage()` in `apps/web/lib/server.ts`.
+- Asset ids stored anywhere (entry `images`, image fields, mood board) must be checked with `requireImageAssets`. Assets are never deleted when a reference goes away (undo may bring the reference back).
+- Project settings (name, archive, overview, visual, inspirations, units, default calendar) are plain fields on `projects`, saved with `PATCH /api/projects/:id/settings`. Calendars are versioned and go through commits. A calendar's `epochOffset` is the story day of its own day 0, so all calendars share one timeline.
 
 ## Glossary
 

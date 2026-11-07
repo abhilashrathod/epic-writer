@@ -39,6 +39,7 @@ export interface ProjectDto {
   name: string;
   createdAt: string;
   commitCount: number;
+  archived: boolean;
 }
 
 export const WORK_MEDIA = [
@@ -240,11 +241,24 @@ export const entityInput = z.object({
   canonState: z.enum(CANON_STATES).default('canon'),
   tags: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
   fields: z.record(z.string(), z.unknown()).default({}),
+  /** CX-5. Left out, an edit keeps the entry's images (AI proposals never send them). */
+  images: z
+    .array(
+      z.object({
+        assetId: z.string().regex(/^[0-9a-f]{24}$/, 'Unknown image'),
+        caption: z.string().trim().max(300).default(''),
+        primary: z.boolean().default(false),
+      }),
+    )
+    .max(50)
+    .optional(),
 });
 
 export type EntityInput = z.infer<typeof entityInput>;
+export type EntityImageDto = NonNullable<EntityInput['images']>[number];
 
 export interface EntityDto extends EntityInput {
+  images: EntityImageDto[];
   key: string;
   slug: string;
   updatedAt: string;
@@ -420,3 +434,143 @@ export const commitsQuery = z.object({
   before: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
+
+// ---------- project settings (PR-1, PR-4, PR-5, PR-6, PR-7) ----------
+
+const text = (max: number) => z.string().trim().max(max);
+const list = (max: number, each = 200) => z.array(text(each).min(1)).max(max);
+
+export const overviewSchema = z.object({
+  logline: text(500),
+  tagline: text(200),
+  synopsisShort: text(2_000),
+  synopsisLong: text(50_000),
+  premise: text(5_000),
+  genres: list(20, 60),
+  tone: text(500),
+  hook: text(2_000),
+  arc: text(10_000),
+  keyQuestions: list(50, 500),
+  themeKeys: z.array(z.string().min(1)).max(50),
+});
+export type OverviewDto = z.infer<typeof overviewSchema>;
+
+export const INSPIRATION_KINDS = [
+  'book',
+  'film',
+  'series',
+  'myth',
+  'art',
+  'music',
+  'other',
+] as const;
+export const inspirationSchema = z.object({
+  title: text(200).min(1, 'Every inspiration needs a title'),
+  kind: z.enum(INSPIRATION_KINDS),
+  creator: text(200),
+  note: text(2_000),
+  url: z.union([
+    z.literal(''),
+    z.string().trim().url('Links must be full web addresses').max(2_000),
+  ]),
+});
+export type InspirationDto = z.infer<typeof inspirationSchema>;
+
+export const unitSchema = z.object({
+  key: z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/, 'Unit keys are short camelCase words'),
+  name: text(60).min(1, 'Every unit needs a name'),
+  abbr: text(12).min(1, 'Every unit needs an abbreviation'),
+  toBase: z.number().finite().positive('A unit’s size must be more than zero'),
+});
+export type UnitDto = z.infer<typeof unitSchema>;
+
+export const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
+export const visualSchema = z.object({
+  palette: z.array(z.string().regex(HEX_COLOUR, 'Colours are six-digit hex codes')).max(24),
+  moodKeywords: list(50, 60),
+  moodboardAssetIds: z.array(z.string().regex(/^[0-9a-f]{24}$/)).max(100),
+});
+export type VisualInput = z.infer<typeof visualSchema>;
+
+export const updateProjectBody = z.union([
+  z.object({ name: text(200).min(1, 'Project name is empty') }),
+  z.object({ archived: z.boolean() }),
+  z.object({ overview: overviewSchema }),
+  z.object({ inspirations: z.array(inspirationSchema).max(200) }),
+  z.object({ units: z.array(unitSchema).max(50) }),
+  z.object({ visual: visualSchema }),
+  z.object({ defaultCalendarKey: z.string().min(1) }),
+]);
+
+export interface ProjectSettingsDto {
+  name: string;
+  archived: boolean;
+  overview: OverviewDto;
+  inspirations: InspirationDto[];
+  units: UnitDto[];
+  visual: { palette: string[]; moodKeywords: string[]; moodboard: UploadedImageDto[] };
+  defaultCalendarKey: string;
+  calendars: CalendarDto[];
+}
+
+// ---------- calendars (PR-3) ----------
+
+export const calendarSchema = z
+  .object({
+    name: text(80).min(1, 'Every calendar needs a name'),
+    /** The story day on which this calendar's day 0 falls: several calendars share one timeline. */
+    epochOffset: z.number().int().safe(),
+    months: z
+      .array(
+        z.object({
+          name: text(40).min(1, 'Every month needs a name'),
+          days: z.number().int().min(1, 'A month has at least one day').max(1000),
+        }),
+      )
+      .min(1, 'A calendar needs at least one month')
+      .max(100),
+    daysPerWeek: z.number().int().min(1).max(30),
+    weekdayNames: z.array(text(40).min(1, 'Every weekday needs a name')).max(30),
+    eras: z
+      .array(
+        z.object({
+          name: text(80).min(1, 'Every era needs a name'),
+          abbr: text(12),
+          startDay: z.number().int().safe(),
+          direction: z.union([z.literal(1), z.literal(-1)]),
+        }),
+      )
+      .min(1, 'A calendar needs at least one era')
+      .max(50),
+    displayFormat: text(80).refine((f) => /\{(day|month|year|era)\}/.test(f), {
+      message: 'The display format needs at least one of {day}, {month}, {year}, {era}',
+    }),
+  })
+  .refine((c) => c.weekdayNames.length === 0 || c.weekdayNames.length === c.daysPerWeek, {
+    message: 'Name every weekday, or none',
+    path: ['weekdayNames'],
+  })
+  .refine((c) => new Set(c.eras.map((e) => e.startDay)).size === c.eras.length, {
+    message: 'Two eras can’t start on the same day',
+    path: ['eras'],
+  });
+export type CalendarInput = z.infer<typeof calendarSchema>;
+export interface CalendarDto extends CalendarInput {
+  key: string;
+}
+
+// ---------- image uploads ----------
+
+export const startUploadBody = z.object({
+  mime: z.string().min(1).max(100),
+  size: z.number().int().positive(),
+});
+export const finishUploadBody = z.object({
+  storageKey: z.string().min(1).max(200),
+  width: z.number().int().positive().max(100_000).nullable(),
+  height: z.number().int().positive().max(100_000).nullable(),
+});
+export interface UploadedImageDto {
+  id: string;
+  url: string;
+}

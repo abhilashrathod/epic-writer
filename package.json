@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:e2e": "pnpm -r --if-present test:e2e",
     "db:indexes": "pnpm --filter @epic/db db:indexes",
+    "r2:cors": "pnpm --filter @epic/core r2:cors",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {

@@ -37,7 +37,15 @@ export function ProjectList() {
     create.mutate(name);
   }
 
-  const projects = list.data?.projects ?? [];
+  const restore = useMutation({
+    mutationFn: (id: string) =>
+      api(`/api/projects/${id}/settings`, { method: 'PATCH', body: { archived: false } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+
+  const all = list.data?.projects ?? [];
+  const projects = all.filter((p) => !p.archived);
+  const archived = all.filter((p) => p.archived);
 
   return (
     <section className="flex flex-col gap-6">
@@ -103,7 +111,7 @@ export function ProjectList() {
         </p>
       )}
 
-      {list.isSuccess && projects.length === 0 && !creating && (
+      {list.isSuccess && all.length === 0 && !creating && (
         <Card className="flex flex-col gap-2 py-10 text-center">
           <p className="font-medium">No projects yet</p>
           <p className="text-muted">A project is a world: one codex, any number of works.</p>
@@ -126,6 +134,29 @@ export function ProjectList() {
             </li>
           ))}
         </ul>
+      )}
+
+      {archived.length > 0 && (
+        <section aria-label="Archived projects" className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-muted">Archived</h2>
+          <ul className="flex flex-col gap-1">
+            {archived.map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-4 px-4 py-1">
+                <Link href={`/projects/${p.id}`} className="text-muted hover:underline">
+                  {p.name}
+                </Link>
+                <Button onClick={() => restore.mutate(p.id)} disabled={restore.isPending}>
+                  Restore {p.name}
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {restore.error && (
+            <p role="alert" className="text-sm text-bad">
+              Couldn’t restore: {restore.error.message}
+            </p>
+          )}
+        </section>
       )}
     </section>
   );

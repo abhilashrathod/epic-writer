@@ -40,7 +40,8 @@ export function ProjectShell({
             ['guide', 'Episode guide'],
             ['ask', 'Ask the codex'],
             ['import', 'Import notes'],
-            ['settings', 'AI settings'],
+            ['overview', 'Overview'],
+            ['settings', 'Settings'],
           ].map(([path, label]) => (
             <Link
               key={path}

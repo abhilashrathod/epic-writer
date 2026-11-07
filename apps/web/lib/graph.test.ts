@@ -54,6 +54,7 @@ const entity = (
     canonState,
     tags: [],
     fields,
+    images: [],
     slug: key,
     updatedAt: '',
   }) as EntityDto;

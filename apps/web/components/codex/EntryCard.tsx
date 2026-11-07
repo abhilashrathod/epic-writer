@@ -37,16 +37,26 @@ export function EntryCard({
   type,
   selected = false,
   life,
+  imageUrl,
 }: {
   entry: CardEntry;
   type: EntityTypeDto | undefined;
   selected?: boolean;
   life?: Life;
+  /** The entry's primary image (CX-5), shown at the top of the card. */
+  imageUrl?: string;
 }) {
   const fade = entry.canonState === 'scrapped' || life?.status === 'unborn';
   const lifeLine = life && lifeText(life);
   return (
     <Card selected={selected} className={`flex h-full flex-col gap-2 ${fade ? 'opacity-60' : ''}`}>
+      {imageUrl && (
+        <img
+          src={imageUrl}
+          alt=""
+          className="aspect-video w-full rounded-lg bg-sunk object-cover"
+        />
+      )}
       <div className="flex items-center gap-2 text-sm">
         <Icon
           name={type?.icon ?? 'circle'}

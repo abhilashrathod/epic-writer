@@ -9,12 +9,14 @@
     "./asof": "./asof.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "r2:cors": "tsx --env-file=../../.env scripts/r2-cors.ts"
   },
   "dependencies": {
     "@epic/db": "workspace:*",
     "@epic/fountain": "workspace:*",
     "@epic/schemas": "workspace:*",
+    "aws4fetch": "^1.0.20",
     "mongodb": "^7.8.0",
     "uuid": "^14.0.3"
   }

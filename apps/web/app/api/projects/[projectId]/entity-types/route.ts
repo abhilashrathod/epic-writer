@@ -21,6 +21,7 @@ export function GET(_req: Request, { params }: Ctx) {
         months: calendar.months,
         eras: calendar.eras,
         displayFormat: calendar.displayFormat,
+        epochOffset: calendar.epochOffset,
       },
     });
   });

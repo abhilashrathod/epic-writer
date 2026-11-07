@@ -4,6 +4,9 @@ import type { StoryTimeShape } from '@epic/core/calendar';
 import type { EntityDto, EntityTypeDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import type { TypesData } from '../../lib/use-types';
+import { useWorkspace } from '../Workspace';
+import { assetUrl } from './EntryImages';
+import { ImageUploadButton } from './ImageUploadButton';
 import { StoryDateInput } from './StoryDateInput';
 
 type FieldDef = EntityTypeDto['fields'][number];
@@ -20,6 +23,7 @@ export function FieldInput(props: {
   selfKey?: string;
 }) {
   const { field: f, value, onChange } = props;
+  const { projectId } = useWorkspace();
   const hint = f.timeVarying ? 'Starting value. Later changes are recorded on the timeline.' : null;
   const label = (
     <span className="text-sm font-medium">
@@ -281,8 +285,24 @@ export function FieldInput(props: {
       break;
     }
     case 'image':
-      // Uploads (R2) arrive in a later step; image fields are skipped until then.
-      return null;
+      control = (
+        <div className="flex items-end gap-3">
+          {typeof value === 'string' && value && (
+            <img
+              src={assetUrl(projectId, value)}
+              alt={f.label}
+              className="h-24 w-24 rounded-lg bg-sunk object-cover"
+            />
+          )}
+          <ImageUploadButton
+            projectId={projectId}
+            label={value ? `Replace ${f.label}` : `Upload ${f.label}`}
+            onUploaded={(up) => onChange(up[0]?.id)}
+          />
+          {Boolean(value) && <Button onClick={() => onChange(undefined)}>Remove {f.label}</Button>}
+        </div>
+      );
+      break;
   }
 
   return (

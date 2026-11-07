@@ -5,6 +5,8 @@ export interface CalendarShape {
   months: { name: string; days: number }[];
   eras: { name: string; abbr: string; startDay: number; direction: 1 | -1 }[];
   displayFormat: string;
+  /** The story day on which this calendar's day 0 falls (PR-3: several calendars, one timeline). */
+  epochOffset?: number;
 }
 
 export type Precision = 'day' | 'month' | 'year' | 'era' | 'unknown';
@@ -44,10 +46,12 @@ function yearStart(cal: CalendarShape, eraIndex: number, year: number): number {
 
 export function toDayIndex(cal: CalendarShape, d: CalendarDate): number {
   const before = cal.months.slice(0, d.month - 1).reduce((n, m) => n + m.days, 0);
-  return yearStart(cal, d.eraIndex, d.year) + before + (d.day - 1);
+  return yearStart(cal, d.eraIndex, d.year) + before + (d.day - 1) + (cal.epochOffset ?? 0);
 }
 
-export function fromDayIndex(cal: CalendarShape, dayIndex: number): CalendarDate {
+export function fromDayIndex(cal: CalendarShape, storyDay: number): CalendarDate {
+  // Eras and years are counted on the calendar's own days.
+  const dayIndex = storyDay - (cal.epochOffset ?? 0);
   const len = yearLength(cal);
   const sorted = erasSorted(cal);
   // The era whose span contains the day; days before every era belong to the earliest one.

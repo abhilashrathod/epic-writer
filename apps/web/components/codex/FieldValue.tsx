@@ -2,6 +2,8 @@
 
 import { formatStoryTime, type CalendarShape, type StoryTimeShape } from '@epic/core/calendar';
 import type { EntityDto, EntityTypeDto } from '@epic/schemas/api';
+import { useWorkspace } from '../Workspace';
+import { assetUrl } from './EntryImages';
 
 type FieldDef = EntityTypeDto['fields'][number];
 
@@ -15,6 +17,7 @@ export function FieldValue(props: {
   onOpen: (key: string) => void;
 }) {
   const { field: f, value: v } = props;
+  const { projectId } = useWorkspace();
   const ref = (k: string) => {
     const e = props.entries.find((x) => x.key === k);
     return e ? (
@@ -61,6 +64,14 @@ export function FieldValue(props: {
       );
     case 'richtext':
       return <span className="whitespace-pre-wrap">{String(v)}</span>;
+    case 'image':
+      return (
+        <img
+          src={assetUrl(projectId, String(v))}
+          alt={f.label}
+          className="max-h-48 rounded-lg bg-sunk object-contain"
+        />
+      );
     default:
       return <>{String(v)}</>;
   }

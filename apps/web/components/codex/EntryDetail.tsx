@@ -11,6 +11,7 @@ import { worldKey, useWorld } from '../../lib/use-world';
 import { useWorkspace } from '../Workspace';
 import { EntryChanges } from './EntryChanges';
 import { EntryCard } from './EntryCard';
+import { assetUrl, primaryImage } from './EntryImages';
 import { EntryRelations } from './EntryRelations';
 import { FieldValue } from './FieldValue';
 
@@ -80,7 +81,30 @@ export function EntryDetail(props: {
 
   return (
     <article aria-label={entry.name} className="flex flex-col gap-4">
-      <EntryCard entry={entry} type={type} life={life} />
+      <EntryCard
+        entry={entry}
+        type={type}
+        life={life}
+        imageUrl={primaryImage(props.projectId, entry)}
+      />
+      {entry.images.length > 1 && (
+        <ul aria-label="Images" className="grid grid-cols-3 gap-2">
+          {entry.images.map((img, i) => (
+            <li key={img.assetId}>
+              <figure className="flex flex-col gap-1">
+                <img
+                  src={assetUrl(props.projectId, img.assetId)}
+                  alt={img.caption || `${entry.name} image ${i + 1}`}
+                  className="aspect-square w-full rounded-lg bg-sunk object-cover"
+                />
+                {img.caption && (
+                  <figcaption className="text-xs text-muted">{img.caption}</figcaption>
+                )}
+              </figure>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex flex-wrap gap-1">
         <Button onClick={props.onEdit}>Edit</Button>
         <Button

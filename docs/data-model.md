@@ -38,7 +38,7 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 
 **users** (plain): `email, name, githubLogin, aiKeys[{ provider, encryptedKey, iv, tag, label, last4 }], preferences{ skin, theme, editorFont, defaultTemplate }`.
 
-**projects** (plain): `ownerId, members[{ userId, role }], name, description, templateKey, mainBranchId, seqCounter, defaultCalendarKey, units[{ key, name, abbr, toBase }], typeGroups[{ key, name, order }], aiSettings{ provider, models{ extraction, continuity, suggestions, chat, embedding }, autoRun:false, monthlyCapMicros }, overview, visual, inspirations`.
+**projects** (plain): `ownerId, members[{ userId, role }], name, description, templateKey, mainBranchId, seqCounter, defaultCalendarKey, units[{ key, name, abbr, toBase }], typeGroups[{ key, name, order }], aiSettings{ provider, models{ extraction, continuity, suggestions, chat, embedding }, autoRun:false, monthlyCapMicros }, overview, visual, inspirations, archivedAt: Date|null`.
 
 **templates** (plain): `key, name, description, ownerId|null (null = built-in), entityTypes[], linkTypes[], workStructures[{ key, name, medium, levels[] }], structureFrameworks[{ key, name, slots[{ key, label, position }] }], calendarPreset, units[]`.
 

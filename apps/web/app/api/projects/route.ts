@@ -24,6 +24,7 @@ export function POST(req: Request) {
       name: p.name,
       createdAt: p.createdAt.toISOString(),
       commitCount: 1,
+      archived: false,
     };
     return Response.json({ project }, { status: 201 });
   });

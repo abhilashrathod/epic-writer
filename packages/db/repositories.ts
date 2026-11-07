@@ -2,6 +2,7 @@ import { ObjectId, type ClientSession, type Db } from 'mongodb';
 import { col } from './client';
 import type {
   AiUsageDoc,
+  AssetDoc,
   BranchDoc,
   CommitDoc,
   DocumentVersionDoc,
@@ -118,7 +119,18 @@ export const projects = {
     db: Db,
     id: ObjectId,
     fields: Partial<
-      Pick<ProjectDoc, 'mainBranchId' | 'defaultCalendarKey' | 'name' | 'description'>
+      Pick<
+        ProjectDoc,
+        | 'mainBranchId'
+        | 'defaultCalendarKey'
+        | 'name'
+        | 'description'
+        | 'archivedAt'
+        | 'overview'
+        | 'visual'
+        | 'inspirations'
+        | 'units'
+      >
     >,
     opts: Opts = {},
   ) =>
@@ -403,6 +415,24 @@ export const scenes = {
       .toArray(),
   listForDocument: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
     col(db, 'scenes').find(p).sort({ order: 1 }).toArray(),
+};
+
+// ---------- assets ----------
+
+export const assets = {
+  async insert(db: Db, doc: NewDoc<AssetDoc>): Promise<AssetDoc> {
+    const full = stamp<AssetDoc>(doc);
+    await col(db, 'assets').insertOne(full);
+    return full;
+  },
+  find: (db: Db, projectId: ObjectId, id: ObjectId) =>
+    col(db, 'assets').findOne({ _id: id, projectId }),
+  findMany: (db: Db, projectId: ObjectId, ids: ObjectId[]) =>
+    col(db, 'assets')
+      .find({ _id: { $in: ids }, projectId })
+      .toArray(),
+  findByStorageKey: (db: Db, projectId: ObjectId, storageKey: string) =>
+    col(db, 'assets').findOne({ projectId, storageKey }),
 };
 
 // ---------- jobs ----------

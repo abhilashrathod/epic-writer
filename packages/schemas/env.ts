@@ -7,6 +7,11 @@ const base64Key32 = z
     'must be exactly 32 bytes, base64-encoded',
   );
 
+const optionalString = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.string().min(1).optional(),
+);
+
 export const mongoEnvSchema = z.object({
   MONGODB_URI: z.string().startsWith('mongodb', 'must be a mongodb:// or mongodb+srv:// URI'),
   MONGODB_DB: z.string().min(1),
@@ -31,6 +36,11 @@ export const webEnvSchema = mongoEnvSchema.extend({
   AUTH_GITHUB_SECRET: z.string().min(1),
   ALLOWED_GITHUB_LOGIN: z.string().min(1),
   KEY_ENCRYPTION_SECRET: base64Key32,
+  // Optional: image uploads are off until all four are set. Blank counts as unset.
+  R2_ACCOUNT_ID: optionalString,
+  R2_ACCESS_KEY_ID: optionalString,
+  R2_SECRET_ACCESS_KEY: optionalString,
+  R2_BUCKET: optionalString,
 });
 
 export type MongoEnv = z.infer<typeof mongoEnvSchema>;
