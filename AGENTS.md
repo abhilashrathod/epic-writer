@@ -113,6 +113,14 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - **Facts** record values that change over story time. A card shows the latest fact at or before the selected story time; the field on the entity is only the starting value.
 - **Text markers** in Fountain/Markdown: scene identity `[[@s:<key>]]` (Markdown: `<!-- s:<key> -->`); mentions `[[@e:<key>|Display Name]]`. The editor hides markers; exporters strip them.
 
+## Jobs and the worker
+
+- The worker (`apps/worker`) claims one job at a time with an atomic `findOneAndUpdate` and locks it for 5 minutes (`lockedBy`, `lockedUntil`). A job whose lock expired (crashed worker) is reclaimed.
+- `attempts` counts runs started (incremented on claim), so crash loops also hit the cap. Max 3 attempts; retries back off 30s, 60s. A type with no handler fails at once.
+- Handlers live in `apps/worker/handlers.ts`, keyed by job `type`, and return the job's `output`.
+- **Worker heartbeat** is a `jobs` row with `projectId: SYSTEM_PROJECT_ID` (all-zero ObjectId), `type: 'noop'`, `status: 'done'`, `input: { heartbeat: true, workerId }`; `updatedAt` is the last beat (every 15s). The schema has no status collection, and the row is never `queued`, so it's never claimed. Read it with `jobs.lastHeartbeat(db)`.
+- SIGTERM/SIGINT: the worker finishes the current job, then exits.
+
 ## Code conventions
 
 - Named exports only, except where Next.js requires a default export.

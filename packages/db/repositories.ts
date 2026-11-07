@@ -2,6 +2,12 @@ import { ObjectId, type ClientSession, type Db } from 'mongodb';
 import { col } from './client';
 import type { BranchDoc, CommitDoc, JobDoc, JobType, ProjectDoc, UserDoc } from './collections';
 
+/**
+ * Scope for system rows that belong to no project (worker heartbeats). The data model has no
+ * status collection, so these live in `jobs` under this all-zero id.
+ */
+export const SYSTEM_PROJECT_ID = new ObjectId('000000000000000000000000');
+
 type Opts = { session?: ClientSession };
 /** Insert input: `_id` is optional so callers can pre-allocate ids that reference each other. */
 type NewDoc<T> = Omit<T, '_id' | 'createdAt' | 'updatedAt'> & { _id?: ObjectId };
@@ -172,4 +178,111 @@ export const jobs = {
     return full;
   },
   findById: (db: Db, id: ObjectId) => col(db, 'jobs').findOne({ _id: id }),
+
+  /**
+   * Atomically claims the oldest runnable job: queued and due, or running with an expired lock
+   * (its worker crashed). `attempts` counts runs started, so crash loops also hit the cap.
+   */
+  claimNext: (db: Db, p: { workerId: string; now: Date; lockMs: number; maxAttempts: number }) =>
+    col(db, 'jobs').findOneAndUpdate(
+      {
+        $or: [
+          { status: 'queued', runAfter: { $lte: p.now } },
+          { status: 'running', lockedUntil: { $lt: p.now }, attempts: { $lt: p.maxAttempts } },
+        ],
+      },
+      {
+        $set: {
+          status: 'running',
+          lockedBy: p.workerId,
+          lockedUntil: new Date(p.now.getTime() + p.lockMs),
+          updatedAt: p.now,
+        },
+        $inc: { attempts: 1 },
+      },
+      { sort: { runAfter: 1 }, returnDocument: 'after' },
+    ),
+
+  /** Fails jobs whose worker died holding them on their last allowed attempt. */
+  failAbandoned: (db: Db, p: { now: Date; maxAttempts: number }) =>
+    col(db, 'jobs').updateMany(
+      { status: 'running', lockedUntil: { $lt: p.now }, attempts: { $gte: p.maxAttempts } },
+      {
+        $set: {
+          status: 'failed',
+          error: 'Worker stopped while running this job on its last attempt',
+          lockedBy: null,
+          lockedUntil: null,
+          updatedAt: p.now,
+        },
+      },
+    ),
+
+  // Finishing updates are guarded by lockedBy, so a worker whose lock expired and was
+  // reclaimed elsewhere can't overwrite the new owner's result.
+  complete: (db: Db, id: ObjectId, workerId: string, output: Record<string, unknown>) =>
+    col(db, 'jobs').updateOne(
+      { _id: id, status: 'running', lockedBy: workerId },
+      {
+        $set: {
+          status: 'done',
+          output,
+          error: null,
+          lockedBy: null,
+          lockedUntil: null,
+          updatedAt: new Date(),
+        },
+      },
+    ),
+
+  /** Requeues at `retryAt`, or fails for good when `retryAt` is null. */
+  fail: (db: Db, id: ObjectId, workerId: string, error: string, retryAt: Date | null) =>
+    col(db, 'jobs').updateOne(
+      { _id: id, status: 'running', lockedBy: workerId },
+      {
+        $set: {
+          status: retryAt ? 'queued' : 'failed',
+          ...(retryAt ? { runAfter: retryAt } : {}),
+          error,
+          lockedBy: null,
+          lockedUntil: null,
+          updatedAt: new Date(),
+        },
+      },
+    ),
+
+  /** Records that a worker is alive. Stored as a jobs row under SYSTEM_PROJECT_ID; never queued. */
+  heartbeat: (db: Db, workerId: string, at = new Date()) =>
+    col(db, 'jobs').updateOne(
+      { projectId: SYSTEM_PROJECT_ID, 'input.heartbeat': true, 'input.workerId': workerId },
+      {
+        $set: { updatedAt: at },
+        $setOnInsert: {
+          projectId: SYSTEM_PROJECT_ID,
+          branchId: SYSTEM_PROJECT_ID,
+          type: 'noop',
+          status: 'done',
+          attempts: 0,
+          lockedBy: null,
+          lockedUntil: null,
+          runAfter: at,
+          progress: { done: 0, total: 0 },
+          input: { heartbeat: true, workerId },
+          output: {},
+          costMicros: 0,
+          error: null,
+          createdAt: at,
+        },
+      },
+      { upsert: true },
+    ),
+
+  /** Most recent heartbeat from any worker, or null if none has run. */
+  async lastHeartbeat(db: Db): Promise<Date | null> {
+    const row = await col(db, 'jobs').findOne(
+      { projectId: SYSTEM_PROJECT_ID, 'input.heartbeat': true },
+      { sort: { updatedAt: -1 }, projection: { updatedAt: 1 } },
+    );
+    return row?.updatedAt ?? null;
+  },
 };

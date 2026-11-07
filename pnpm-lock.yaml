@@ -200,6 +200,21 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@24.19.2)(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15))
 
+  apps/worker:
+    dependencies:
+      '@epic/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@epic/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      mongodb:
+        specifier: ^7.8.0
+        version: 7.8.0
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
   packages/ai: {}
 
   packages/core:

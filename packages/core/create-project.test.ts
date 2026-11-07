@@ -13,7 +13,11 @@ afterAll(() => drop());
 describe('createProject', () => {
   it('creates the project, a main branch and the default calendar as commit 1', async () => {
     const ownerId = new ObjectId();
-    const project = await createProject(db, { ownerId, name: ' Test World ', templateKey: 'blank' });
+    const project = await createProject(db, {
+      ownerId,
+      name: ' Test World ',
+      templateKey: 'blank',
+    });
     expect(project).toMatchObject({
       name: 'Test World',
       ownerId,
