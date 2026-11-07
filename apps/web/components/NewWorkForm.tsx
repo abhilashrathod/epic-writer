@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { WORK_MEDIA } from '@epic/schemas/api';
+import { DEFAULT_LEVELS, WORK_MEDIA } from '@epic/schemas/api';
 import { Button, Field, focusRing } from '@epic/ui';
 import { api } from '../lib/api-client';
 import { useTreeMutation } from '../lib/use-tree';
+import { LevelsEditor } from './LevelsEditor';
 import { useWorkspace } from './Workspace';
 
 const MEDIUM_LABEL: Record<(typeof WORK_MEDIA)[number], string> = {
@@ -22,8 +23,9 @@ export function NewWorkForm({ onDone }: { onDone?: () => void }) {
   const { projectId } = useWorkspace();
   const [name, setName] = useState('');
   const [medium, setMedium] = useState<(typeof WORK_MEDIA)[number]>('series');
+  const [levels, setLevels] = useState(DEFAULT_LEVELS.series);
   const create = useTreeMutation(projectId, () =>
-    api(`/api/projects/${projectId}/works`, { method: 'POST', body: { name, medium } }),
+    api(`/api/projects/${projectId}/works`, { method: 'POST', body: { name, medium, levels } }),
   );
 
   function submit(e: FormEvent) {
@@ -45,7 +47,11 @@ export function NewWorkForm({ onDone }: { onDone?: () => void }) {
         Kind
         <select
           value={medium}
-          onChange={(e) => setMedium(e.target.value as typeof medium)}
+          onChange={(e) => {
+            const m = e.target.value as typeof medium;
+            setMedium(m);
+            setLevels(DEFAULT_LEVELS[m]);
+          }}
           className={`h-10 rounded-lg bg-sunk px-2 font-normal text-ink ${focusRing}`}
         >
           {WORK_MEDIA.map((m) => (
@@ -55,6 +61,7 @@ export function NewWorkForm({ onDone }: { onDone?: () => void }) {
           ))}
         </select>
       </label>
+      <LevelsEditor levels={levels} onChange={setLevels} />
       <div className="flex gap-2">
         <Button type="submit" variant="primary" disabled={create.isPending || !name.trim()}>
           Create work

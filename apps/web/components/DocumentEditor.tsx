@@ -1,5 +1,6 @@
 'use client';
 
+import * as Menu from '@radix-ui/react-dropdown-menu';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { mentionMarker } from '@epic/fountain';
@@ -7,6 +8,7 @@ import type { MentionCandidate } from '@epic/fountain/mentions';
 import type { DocumentTextDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import { api } from '../lib/api-client';
+import { AskCodex } from './AskCodex';
 import { useContinuity } from '../lib/use-continuity';
 import { useDocumentSync, type SaveStatus } from '../lib/use-document-sync';
 import { useEntities, useTypes } from '../lib/use-types';
@@ -26,6 +28,15 @@ const STATUS_TEXT: Record<SaveStatus, string> = {
   conflict: 'Changed on another device',
 };
 
+type FocusPanel = 'scenes' | 'ask' | 'check' | 'history' | 'extract';
+const FOCUS_BUTTONS: [FocusPanel, string][] = [
+  ['scenes', 'Scenes'],
+  ['ask', 'Ask'],
+  ['check', 'Check'],
+  ['history', 'History'],
+];
+const menuItem =
+  'flex cursor-default rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-sunk';
 export function DocumentEditor({
   documentKey,
   sceneKey,
@@ -118,13 +129,22 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
       : null;
   const cardEntry = card ? entities.data?.find((e) => e.key === card.key) : undefined;
   const [typing, setTyping] = useState(false);
-  const [showScenes, setShowScenes] = useState(false);
+  // Focus mode shows one drawer at a time over the page (ED-11).
+  const [focusPanel, setFocusPanel] = useState<FocusPanel | null>(null);
+  const toggleFocusPanel = (p: FocusPanel) => setFocusPanel((x) => (x === p ? null : p));
   const typingRef = useRef(false);
 
-  // Focus mode: Esc exits, and controls fade while typing and return when the mouse moves.
+  // Focus mode: Esc closes the open drawer, then exits; controls fade while typing and return
+  // when the mouse moves.
   useEffect(() => {
     if (!focus) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFocus(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setFocusPanel((p) => {
+        if (!p) setFocus(false);
+        return null;
+      });
+    };
     const onMove = () => {
       if (typingRef.current) {
         typingRef.current = false;
@@ -211,16 +231,69 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
               Download .{document.format === 'fountain' ? 'fountain' : 'md'}
             </a>
           )}
+          {focus &&
+            FOCUS_BUTTONS.map(([p, label]) => (
+              <Button key={p} onClick={() => toggleFocusPanel(p)} aria-expanded={focusPanel === p}>
+                {p === 'check' && openIssues > 0 ? `${label} (${openIssues})` : label}
+              </Button>
+            ))}
           {focus && (
-            <Button onClick={() => setShowScenes((s) => !s)} aria-expanded={showScenes}>
-              Scenes
-            </Button>
+            <Menu.Root>
+              <Menu.Trigger asChild>
+                <Button aria-label="More">More</Button>
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Content
+                  align="end"
+                  className="z-50 min-w-40 rounded-xl bg-panel p-1.5 text-ink shadow-lg"
+                >
+                  <Menu.Item className={menuItem} onSelect={() => setFocusPanel('extract')}>
+                    Extract
+                  </Menu.Item>
+                  <Menu.Item asChild className={menuItem}>
+                    <a href={`${base}/download`} download>
+                      Download .{document.format === 'fountain' ? 'fountain' : 'md'}
+                    </a>
+                  </Menu.Item>
+                </Menu.Content>
+              </Menu.Portal>
+            </Menu.Root>
           )}
           <Button onClick={() => setFocus(!focus)}>{focus ? 'Exit focus (Esc)' : 'Focus'}</Button>
         </div>
       </header>
 
-      {focus && showScenes && (
+      {focus && focusPanel && focusPanel !== 'scenes' && (
+        <div className="fixed right-3 top-14 z-50 max-h-[80vh] w-[28rem] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-xl bg-panel shadow-lg">
+          {focusPanel === 'ask' && <AskCodex />}
+          {focusPanel === 'check' && (
+            <ContinuityPanel
+              projectId={projectId}
+              continuity={continuity}
+              entries={entities.data ?? []}
+              onJump={jumpTo}
+              onClose={() => setFocusPanel(null)}
+            />
+          )}
+          {focusPanel === 'history' && (
+            <HistoryPanel
+              base={base}
+              prepareRestore={async () => ((await sync.save()) ? sync.baseVersion() : null)}
+              onRestored={sync.applyRestored}
+              onClose={() => setFocusPanel(null)}
+            />
+          )}
+          {focusPanel === 'extract' && (
+            <ExtractPanel
+              documentKey={document.key}
+              save={sync.save}
+              onClose={() => setFocusPanel(null)}
+            />
+          )}
+        </div>
+      )}
+
+      {focus && focusPanel === 'scenes' && (
         <nav
           aria-label="Scenes"
           className="fixed right-3 top-14 z-50 max-h-[70vh] w-64 overflow-y-auto rounded-xl bg-panel p-2 shadow-lg"

@@ -113,6 +113,7 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - **Facts** record values that change over story time. A card shows the latest fact at or before the selected story time; the field on the entity is only the starting value.
 - **First appearances** (`entities.firstAppearances`, CX-5) are derived on save by `core/first-appearances.ts`: per work, the earliest scene that mentions the entry outside dialogue (any mention in prose), written as an `auto` commit only when it moves. Never set it by hand; undo keeps the current value.
 - **History and undo** (BR-2): `core/history.ts` lists commits and their changes; `undoCommit` writes a new commit restoring prior versions (the `restore` change op brings back a tombstone). It refuses when a later commit touched the same rows. Working texts are outside commits and aren't undone.
+- **Work levels** (WK-2) come from the user (`DEFAULT_LEVELS` in `@epic/schemas/api` per medium). Level keys stay stable by position (documents store `levelKey`), so levels can be renamed anytime but added or removed only while the work has no documents.
 - **Text markers** in Fountain/Markdown: scene identity `[[@s:<key>]]` (Markdown: `<!-- s:<key> -->`); mentions `[[@e:<key>|Display Name]]`. The editor hides markers; exporters strip them.
 
 ## Jobs and the worker

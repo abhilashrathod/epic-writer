@@ -53,10 +53,43 @@ export const WORK_MEDIA = [
   'other',
 ] as const;
 
+/** WK-2: a work's structure, outermost first (Book → Part → Chapter). The last level holds text. */
+export const levelNamesSchema = z
+  .array(
+    z.object({
+      singular: z.string().trim().min(1, 'Name every level').max(40),
+      plural: z.string().trim().min(1, 'Give every level a plural').max(40),
+    }),
+  )
+  .min(1, 'A work needs at least one level')
+  .max(5, 'A work can have at most five levels');
+export type LevelNames = z.infer<typeof levelNamesSchema>;
+
+/** Default structure per medium, used when a new work doesn't set its own. */
+export const DEFAULT_LEVELS: Record<(typeof WORK_MEDIA)[number], LevelNames> = {
+  series: [
+    { singular: 'Season', plural: 'Seasons' },
+    { singular: 'Episode', plural: 'Episodes' },
+  ],
+  film: [{ singular: 'Script', plural: 'Scripts' }],
+  short: [{ singular: 'Script', plural: 'Scripts' }],
+  stage: [{ singular: 'Act', plural: 'Acts' }],
+  game: [{ singular: 'Chapter', plural: 'Chapters' }],
+  novel: [{ singular: 'Chapter', plural: 'Chapters' }],
+  trilogy: [
+    { singular: 'Book', plural: 'Books' },
+    { singular: 'Chapter', plural: 'Chapters' },
+  ],
+  other: [{ singular: 'Part', plural: 'Parts' }],
+};
+
 export const createWorkBody = z.object({
   name: z.string().trim().min(1, 'Name the work').max(200),
   medium: z.enum(WORK_MEDIA),
+  levels: levelNamesSchema.optional(),
 });
+
+export const updateWorkBody = z.object({ levels: levelNamesSchema });
 
 export const createDocumentBody = z.object({
   workKey: z.string().min(1),
@@ -574,3 +607,5 @@ export interface UploadedImageDto {
   id: string;
   url: string;
 }
+
+export const factCanonBody = z.object({ canonState: z.enum(CANON_STATES) });

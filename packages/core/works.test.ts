@@ -10,9 +10,11 @@ import {
   deleteDocument,
   getTree,
   getWorkingText,
+  levelsFrom,
   moveDocument,
   openProject,
   renameDocument,
+  setWorkLevels,
   type ProjectContext,
 } from './works';
 
@@ -129,5 +131,52 @@ describe('works and documents', () => {
     await expect(createWork(db, ctx, { name: ' ', medium: 'film' })).rejects.toBeInstanceOf(
       Invalid,
     );
+  });
+});
+
+describe('work structure levels (WK-2)', () => {
+  it('keeps keys by position and names new levels from their names', () => {
+    const old = levelsFrom([{ singular: 'Season', plural: 'Seasons' }]);
+    expect(old[0]).toMatchObject({ key: 'season', labelFormat: '{singular} {number}' });
+    const next = levelsFrom(
+      [
+        { singular: 'Arc', plural: 'Arcs' },
+        { singular: 'Part', plural: 'Parts' },
+        { singular: 'Part', plural: 'Parts' },
+      ],
+      old,
+    );
+    expect(next.map((l) => l.key)).toEqual(['season', 'part', 'part2']);
+  });
+
+  it('creates a work with its own levels and reshapes it only while empty', async () => {
+    const levels = [
+      { singular: 'Book', plural: 'Books' },
+      { singular: 'Part', plural: 'Parts' },
+      { singular: 'Chapter', plural: 'Chapters' },
+    ];
+    const workKey = await createWork(db, ctx, { name: 'Saga', medium: 'novel', levels });
+    const book = await createDocument(db, ctx, { workKey, parentKey: null });
+    const part = await createDocument(db, ctx, { workKey, parentKey: book });
+    const chapter = await createDocument(db, ctx, { workKey, parentKey: part });
+    const { documents, works } = await getTree(db, ctx);
+    expect(documents.find((d) => d.key === chapter)).toMatchObject({
+      kind: 'text',
+      title: 'Chapter 1',
+    });
+    expect(documents.find((d) => d.key === part)).toMatchObject({ kind: 'container' });
+
+    await setWorkLevels(db, ctx, workKey, [
+      { singular: 'Volume', plural: 'Volumes' },
+      ...levels.slice(1),
+    ]);
+    const after = (await getTree(db, ctx)).works.find((w) => w.key === workKey)!;
+    expect(after.levels.map((l) => [l.key, l.singular])).toEqual([
+      [works.find((w) => w.key === workKey)!.levels[0]!.key, 'Volume'],
+      ['part', 'Part'],
+      ['chapter', 'Chapter'],
+    ]);
+    await expect(setWorkLevels(db, ctx, workKey, levels.slice(1))).rejects.toBeInstanceOf(Invalid);
+    await expect(setWorkLevels(db, ctx, 'nope', levels)).rejects.toBeInstanceOf(NotFound);
   });
 });

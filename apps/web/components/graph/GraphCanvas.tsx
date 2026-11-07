@@ -64,6 +64,7 @@ export function GraphCanvas({
   selectedKey = null,
   onOpen,
   label,
+  heightClass = 'h-[70vh] min-h-96',
 }: {
   graph: Graph;
   types: EntityTypeDto[];
@@ -71,6 +72,8 @@ export function GraphCanvas({
   selectedKey?: string | null;
   onOpen: (key: string) => void;
   label: string;
+  /** Smaller on entry pages than on the graph page. */
+  heightClass?: string;
 }) {
   const [pos, setPos] = useState<{
     for: Graph;
@@ -142,7 +145,7 @@ export function GraphCanvas({
       role="group"
       aria-label={label}
       style={theme}
-      className="h-[70vh] min-h-96 overflow-hidden rounded-xl bg-panel"
+      className={`${heightClass} overflow-hidden rounded-xl bg-panel`}
     >
       {flow ? (
         // A new layout remounts so the view fits the new graph.

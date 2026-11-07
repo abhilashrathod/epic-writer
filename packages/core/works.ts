@@ -16,7 +16,12 @@ import {
 import { commit, commitInSession, versionBody, type Change } from './commit';
 import { emptyOverview, emptyVisual } from './defaults';
 import { Invalid, NotFound } from './errors';
-import type { DocumentDetails } from '@epic/schemas/api';
+import {
+  DEFAULT_LEVELS,
+  levelNamesSchema,
+  type DocumentDetails,
+  type LevelNames,
+} from '@epic/schemas/api';
 
 /** Who is acting, in which project and on which branch. */
 export interface ProjectContext {
@@ -39,34 +44,30 @@ export async function openProject(
   return { project, scope: { projectId, branchId: project.mainBranchId }, userId };
 }
 
-const level = (key: string, singular: string, plural: string): WorkLevel => ({
-  key,
-  singular,
-  plural,
-  numbering: 'arabic',
-  labelFormat: '{singular} {number}',
-});
+/**
+ * Levels from names. Keys stay stable by position (documents point at them), so renaming a level
+ * keeps its documents; new levels get a key from their name.
+ */
+export function levelsFrom(names: LevelNames, existing: WorkLevel[] = []): WorkLevel[] {
+  const taken = new Set<string>();
+  return names.map((n, i) => {
+    const old = existing[i];
+    let key = old?.key ?? (n.singular.toLowerCase().replace(/[^a-z0-9]+/g, '') || 'level');
+    for (let k = 2; !old && taken.has(key); k++) key = `${key.replace(/\d+$/, '')}${k}`;
+    taken.add(key);
+    return {
+      key,
+      singular: n.singular,
+      plural: n.plural,
+      numbering: old?.numbering ?? 'arabic',
+      labelFormat: old?.labelFormat ?? '{singular} {number}',
+    };
+  });
+}
 
-/** Default structure per medium until templates (PR-2) define their own. */
-export const DEFAULT_STRUCTURES: Record<
-  WorkMedium,
-  { levels: WorkLevel[]; contentType: ContentType }
-> = {
-  series: {
-    levels: [level('season', 'Season', 'Seasons'), level('episode', 'Episode', 'Episodes')],
-    contentType: 'screenplay',
-  },
-  film: { levels: [level('script', 'Script', 'Scripts')], contentType: 'screenplay' },
-  short: { levels: [level('script', 'Script', 'Scripts')], contentType: 'screenplay' },
-  stage: { levels: [level('act', 'Act', 'Acts')], contentType: 'screenplay' },
-  game: { levels: [level('chapter', 'Chapter', 'Chapters')], contentType: 'screenplay' },
-  novel: { levels: [level('chapter', 'Chapter', 'Chapters')], contentType: 'prose' },
-  trilogy: {
-    levels: [level('book', 'Book', 'Books'), level('chapter', 'Chapter', 'Chapters')],
-    contentType: 'prose',
-  },
-  other: { levels: [level('part', 'Part', 'Parts')], contentType: 'prose' },
-};
+const SCRIPT_MEDIA = new Set<WorkMedium>(['series', 'film', 'short', 'stage', 'game']);
+const contentTypeFor = (m: WorkMedium): ContentType =>
+  SCRIPT_MEDIA.has(m) ? 'screenplay' : 'prose';
 
 const author = (ctx: ProjectContext) => ({ kind: 'user' as const, userId: ctx.userId });
 const pad = (n: number) => String(n).padStart(4, '0');
@@ -95,11 +96,12 @@ export async function getTree(db: Db, ctx: ProjectContext): Promise<WorkTree> {
 export async function createWork(
   db: Db,
   ctx: ProjectContext,
-  input: { name: string; medium: WorkMedium },
+  input: { name: string; medium: WorkMedium; levels?: LevelNames },
 ): Promise<string> {
   const name = input.name.trim();
   if (!name) throw new Invalid('Name the work');
-  const { levels, contentType } = DEFAULT_STRUCTURES[input.medium];
+  const levels = levelsFrom(levelNamesSchema.parse(input.levels ?? DEFAULT_LEVELS[input.medium]));
+  const contentType = contentTypeFor(input.medium);
   const order = (await readHeads(db, 'works', ctx.scope)).length;
   const { keys } = await commit(db, {
     ...ctx.scope,
@@ -304,6 +306,39 @@ export async function setDocumentDetails(
     message: `Edit details of "${doc.title}"`,
     author: author(ctx),
     changes: [{ op: 'update', collection: 'documents', key, data: next }],
+  });
+}
+
+/**
+ * WK-2: renames a work's levels, or reshapes them while the work has no documents yet (existing
+ * documents sit at fixed depths, so the number of levels is locked once there are any).
+ */
+export async function setWorkLevels(
+  db: Db,
+  ctx: ProjectContext,
+  workKey: string,
+  names: LevelNames,
+): Promise<void> {
+  const work = await readHeadByKey(db, 'works', ctx.scope, workKey);
+  if (!work) throw new NotFound('Work not found');
+  const parsed = levelNamesSchema.parse(names);
+  const docs = await workDocuments(db, ctx, workKey);
+  if (docs.length && parsed.length !== work.levels.length)
+    throw new Invalid(
+      `"${work.name}" already has documents, so its levels can be renamed but not added or removed`,
+    );
+  await commit(db, {
+    ...ctx.scope,
+    message: `Edit the structure of "${work.name}"`,
+    author: author(ctx),
+    changes: [
+      {
+        op: 'update',
+        collection: 'works',
+        key: workKey,
+        data: { ...versionBody(work), levels: levelsFrom(parsed, work.levels) },
+      },
+    ],
   });
 }
 

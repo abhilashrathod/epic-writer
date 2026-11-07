@@ -5,8 +5,8 @@ import { resolveFields } from './asof';
 import { createProject } from './create-project';
 import { createEntity, updateEntity } from './entities';
 import { listEntityTypes } from './entity-types';
-import { Invalid } from './errors';
-import { addFact, deleteFact, listFacts, worldSnapshot } from './facts';
+import { Invalid, NotFound } from './errors';
+import { addFact, deleteFact, listFacts, setFactCanonState, worldSnapshot } from './facts';
 import { createLink, listLinkTypes } from './links';
 import { openProject, type ProjectContext } from './works';
 
@@ -31,6 +31,22 @@ beforeEach(async () => {
 const year = (y: number) => ({ start: y * 360, end: null, precision: 'year' as const });
 
 describe('facts', () => {
+  it('marks a change scrapped, leaving it out of the world, and restores it (CX-12)', async () => {
+    const hero = await createEntity(db, ctx, { typeKey: T.Character, name: 'Hero' });
+    const key = await addFact(db, ctx, {
+      entityKey: hero,
+      field: 'status',
+      value: 'dead',
+      storyTime: year(3),
+    });
+    await setFactCanonState(db, ctx, key, 'scrapped');
+    expect((await worldSnapshot(db, ctx)).facts.map((f) => f.key)).not.toContain(key);
+    expect((await listFacts(db, ctx, hero))[0]).toMatchObject({ key, canonState: 'scrapped' });
+    await setFactCanonState(db, ctx, key, 'tentative');
+    expect((await worldSnapshot(db, ctx)).facts.map((f) => f.key)).toContain(key);
+    await expect(setFactCanonState(db, ctx, 'nope', 'canon')).rejects.toBeInstanceOf(NotFound);
+  });
+
   it('records changes to time-varying fields that resolve as of a point', async () => {
     const hero = await createEntity(db, ctx, {
       typeKey: T.Character,

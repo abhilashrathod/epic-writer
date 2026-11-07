@@ -2,7 +2,7 @@ import type { Db, ObjectId } from 'mongodb';
 import { readHeadByKey, readHeads, type EntityDoc, type FactDoc, type LinkDoc } from '@epic/db';
 import { factInput } from '@epic/schemas/api';
 import { entityFieldsSchema } from '@epic/schemas/entity-fields';
-import { commit, type Change } from './commit';
+import { commit, versionBody, type Change } from './commit';
 import type { PendingEntities } from './entities';
 import { Invalid, NotFound } from './errors';
 import type { ProjectContext } from './works';
@@ -102,6 +102,29 @@ export async function deleteFact(db: Db, ctx: ProjectContext, key: string): Prom
     message: 'Remove a change',
     author: author(ctx),
     changes: [{ op: 'delete', collection: 'facts', key }],
+  });
+}
+
+/**
+ * CX-12: marks a recorded change canon, tentative or scrapped. Scrapped changes stay in the codex
+ * but drop out of values, checks and AI context (AGENTS.md rule 9).
+ */
+export async function setFactCanonState(
+  db: Db,
+  ctx: ProjectContext,
+  key: string,
+  canonState: FactDoc['canonState'],
+): Promise<void> {
+  const fact = await readHeadByKey(db, 'facts', ctx.scope, key);
+  if (!fact) throw new NotFound('Change not found');
+  if (fact.canonState === canonState) return;
+  await commit(db, {
+    ...ctx.scope,
+    message: `Mark a change ${canonState}`,
+    author: author(ctx),
+    changes: [
+      { op: 'update', collection: 'facts', key, data: { ...versionBody(fact), canonState } },
+    ],
   });
 }
 

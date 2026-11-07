@@ -6,10 +6,12 @@ import { formatPoint, lifeAt, resolveFields } from '@epic/core/asof';
 import type { EntityDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import { api } from '../../lib/api-client';
-import { entitiesKey, type TypesData } from '../../lib/use-types';
+import { entitiesKey, useLinkTypes, type TypesData } from '../../lib/use-types';
 import { worldKey, useWorld } from '../../lib/use-world';
 import { useWorkspace } from '../Workspace';
 import { EntryChanges } from './EntryChanges';
+import { EntryDiagram } from './EntryDiagram';
+import { EntryHistory } from './EntryHistory';
 import { EntryCard } from './EntryCard';
 import { assetUrl, primaryImage } from './EntryImages';
 import { EntryRelations } from './EntryRelations';
@@ -39,6 +41,7 @@ export function EntryDetail(props: {
     ]);
   const { asOf } = useWorkspace();
   const world = useWorld(props.projectId);
+  const linkTypes = useLinkTypes(props.projectId);
   const facts = useMemo(
     () =>
       (world.data?.facts ?? [])
@@ -203,10 +206,33 @@ export function EntryDetail(props: {
           type={type}
           meta={props.meta}
           entries={props.entries}
-          facts={facts}
           onOpen={props.onOpen}
         />
       )}
+      {type && world.data && type.traits.includes('institution') && (
+        <EntryHistory
+          entry={entry}
+          world={world.data}
+          types={props.meta.types}
+          asOf={asOf}
+          calendar={props.meta.calendar}
+          onOpen={props.onOpen}
+        />
+      )}
+      {type &&
+        world.data &&
+        linkTypes.data &&
+        (type.traits.includes('institution') || type.traits.includes('geo')) && (
+          <EntryDiagram
+            entry={entry}
+            type={type}
+            world={world.data}
+            types={props.meta.types}
+            linkTypes={linkTypes.data}
+            asOf={asOf}
+            onOpen={props.onOpen}
+          />
+        )}
       <EntryRelations
         projectId={props.projectId}
         entry={entry}

@@ -79,6 +79,22 @@ test('focus mode hides the sidebar, keeps the text, and Esc exits (ED-11)', asyn
   await expect(page.getByRole('complementary', { name: 'Works' })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Exit focus (Esc)' })).toBeVisible();
   await expect(line(page, 'sceneHeading')).toHaveText('INT. HALL - DAY');
+
+  // Faint controls open one drawer at a time: scenes, ask, check, history, more.
+  await page.getByRole('button', { name: 'History' }).click();
+  await expect(page.getByRole('complementary', { name: 'History' })).toBeVisible();
+  await page.getByRole('button', { name: 'Check' }).click();
+  await expect(page.getByRole('complementary', { name: 'History' })).toBeHidden();
+  await expect(page.getByLabel('Continuity')).toBeVisible();
+  await page.getByRole('button', { name: 'Ask' }).click();
+  await expect(page.getByRole('form', { name: 'Ask the codex' })).toBeVisible();
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menuitem', { name: 'Extract' }).click();
+  await expect(page.getByLabel('Extract', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape'); // closes the drawer first
+  await expect(page.getByLabel('Extract', { exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Exit focus (Esc)' })).toBeVisible();
+
   await page.keyboard.press('Escape');
   await expect(page.getByRole('complementary', { name: 'Works' })).toBeVisible();
   await expect(line(page, 'sceneHeading')).toHaveText('INT. HALL - DAY');

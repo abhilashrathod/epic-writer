@@ -5,6 +5,25 @@ import { applyTemplate, BUILT_IN_TEMPLATES } from './templates';
 
 describe('built-in templates', () => {
   for (const t of Object.values(BUILT_IN_TEMPLATES)) {
+    if (t.key !== 'blank')
+      it(`${t.key}: has geography links, a full rule system, abilities and changing artifacts (EP-1, 5, 6)`, () => {
+        expect(t.links.map((l) => l.label)).toEqual(
+          expect.arrayContaining(['borders', 'flows through', 'crosses']),
+        );
+        const fieldsOf = (trait: string) =>
+          t.types.filter((x) => x.traits.includes(trait as never)).map((x) => x.fields);
+        const [rules] = fieldsOf('ruleSystem');
+        expect(rules!.map((f) => f.key)).toEqual(
+          expect.arrayContaining(['source', 'cost', 'limits', 'users', 'counters', 'conditions']),
+        );
+        for (const ability of fieldsOf('ability'))
+          expect(ability.map((f) => f.key)).toEqual(
+            expect.arrayContaining(['system', 'charges', 'conditions', 'holderKey']),
+          );
+        const artifact = t.types.find((x) => x.name === 'Weapon or artifact')!;
+        expect(artifact.fields.find((f) => f.key === 'properties')?.timeVarying).toBe(true);
+      });
+
     it(`${t.key}: every type passes the user-facing type schema and every reference resolves`, () => {
       const { changes, calendarKey, typeGroups } = applyTemplate(t);
       const types = changes.filter((c) => c.op === 'create' && c.collection === 'entityTypes');

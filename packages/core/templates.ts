@@ -178,6 +178,83 @@ const kinshipLinks = (person: string, group: string): TLink[] => [
   { label: 'caused', inverse: 'caused by', kind: 'causal', from: ['event'], to: ['event'] },
 ];
 
+/** EP-1: links between places beyond nesting. */
+const geoLinks = (places: string[], routes: string[]): TLink[] => [
+  {
+    label: 'borders',
+    inverse: 'borders',
+    kind: 'location',
+    symmetric: true,
+    from: places,
+    to: places,
+  },
+  {
+    label: 'flows through',
+    inverse: 'has flowing through it',
+    kind: 'location',
+    from: places,
+    to: places,
+  },
+  {
+    label: 'crosses',
+    inverse: 'crossed by',
+    kind: 'location',
+    from: [...routes, ...places],
+    to: places,
+  },
+];
+
+/** EP-5: a rule system (magic, technology, divine power) with who may use it and what counters it. */
+const ruleSystemType = (id: string, name: string, plural: string, users: string[]): TType => ({
+  id,
+  name,
+  plural,
+  icon: 'gem',
+  color: 'cat-6',
+  group: 'Lore',
+  traits: ['ruleSystem'],
+  fields: [
+    { key: 'source', label: 'Source', kind: 'richtext' },
+    { key: 'cost', label: 'Cost', kind: 'richtext' },
+    { key: 'limits', label: 'Limits', kind: 'richtext' },
+    {
+      key: 'users',
+      label: 'Who can use it',
+      kind: 'entityRefList',
+      refs: users,
+      timeVarying: true,
+    },
+    { key: 'counters', label: 'Countered by', kind: 'entityRefList', refs: [id] },
+    { key: 'conditions', label: 'Conditions', kind: 'richtext' },
+  ],
+});
+
+/** EP-5: one power drawn from a rule system, with charges and conditions; uses are events. */
+const abilityFields = (system: string, self: string, holders: string[]): TField[] => [
+  { key: 'system', label: 'Rule system', kind: 'entityRef', refs: [system] },
+  { key: 'conditions', label: 'Conditions', kind: 'richtext' },
+  { key: 'cost', label: 'Cost', kind: 'richtext' },
+  { key: 'counters', label: 'Countered by', kind: 'entityRefList', refs: [self] },
+  { key: 'charges', label: 'Uses left', kind: 'number', timeVarying: true },
+  { key: 'holderKey', label: 'Held by', kind: 'entityRef', refs: holders, timeVarying: true },
+];
+
+/** EP-6: weapons and artifacts whose holder and properties change over time. */
+const artifactType = (id: string, holders: string[]): TType => ({
+  id,
+  name: 'Weapon or artifact',
+  plural: 'Weapons and artifacts',
+  icon: 'sword',
+  color: 'cat-5',
+  group: 'War',
+  traits: ['holdable'],
+  fields: [
+    { key: 'properties', label: 'Properties', kind: 'richtext', timeVarying: true },
+    { key: 'condition', label: 'Condition', kind: 'text', timeVarying: true },
+    { key: 'holderKey', label: 'Held by', kind: 'entityRef', refs: holders, timeVarying: true },
+  ],
+});
+
 const mythological: BuiltInTemplate = {
   key: 'mythological',
   ...TEMPLATE_INFO.mythological,
@@ -270,36 +347,11 @@ const mythological: BuiltInTemplate = {
         { key: 'deity', label: 'Granted by', kind: 'entityRef', refs: ['character'] },
         { key: 'invocation', label: 'Invocation', kind: 'richtext' },
         { key: 'effect', label: 'Effect', kind: 'richtext' },
-        { key: 'counters', label: 'Countered by', kind: 'entityRefList', refs: ['astra'] },
-        { key: 'charges', label: 'Uses left', kind: 'number', timeVarying: true },
-        {
-          key: 'holderKey',
-          label: 'Held by',
-          kind: 'entityRef',
-          refs: ['character'],
-          timeVarying: true,
-        },
+        ...abilityFields('power', 'astra', ['character']),
       ],
     },
-    {
-      id: 'weapon',
-      name: 'Weapon or artifact',
-      plural: 'Weapons and artifacts',
-      icon: 'sword',
-      color: 'cat-5',
-      group: 'War',
-      traits: ['holdable'],
-      fields: [
-        { key: 'properties', label: 'Properties', kind: 'richtext' },
-        {
-          key: 'holderKey',
-          label: 'Held by',
-          kind: 'entityRef',
-          refs: ['character'],
-          timeVarying: true,
-        },
-      ],
-    },
+    artifactType('weapon', ['character']),
+    ruleSystemType('power', 'Power system', 'Power systems', ['character']),
     {
       id: 'army',
       name: 'Army',
@@ -369,6 +421,7 @@ const mythological: BuiltInTemplate = {
       from: ['place', 'kingdom'],
       to: ['place', 'kingdom'],
     },
+    ...geoLinks(['place', 'kingdom'], []),
     {
       label: 'holds',
       inverse: 'held by',
@@ -479,37 +532,19 @@ const fantasy: BuiltInTemplate = {
         },
       ],
     },
+    artifactType('artifact', ['character']),
+    ruleSystemType('magic', 'Magic system', 'Magic systems', ['character', 'house']),
     {
-      id: 'artifact',
-      name: 'Weapon or artifact',
-      plural: 'Weapons and artifacts',
-      icon: 'sword',
+      id: 'spell',
+      name: 'Spell or ability',
+      plural: 'Spells and abilities',
+      icon: 'star',
       color: 'cat-5',
-      group: 'War',
-      traits: ['holdable'],
-      fields: [
-        { key: 'properties', label: 'Properties', kind: 'richtext' },
-        {
-          key: 'holderKey',
-          label: 'Held by',
-          kind: 'entityRef',
-          refs: ['character'],
-          timeVarying: true,
-        },
-      ],
-    },
-    {
-      id: 'magic',
-      name: 'Magic system',
-      plural: 'Magic systems',
-      icon: 'gem',
-      color: 'cat-6',
       group: 'Lore',
-      traits: ['ruleSystem'],
+      traits: ['ability', 'holdable'],
       fields: [
-        { key: 'source', label: 'Source', kind: 'richtext' },
-        { key: 'cost', label: 'Cost', kind: 'richtext' },
-        { key: 'limits', label: 'Limits', kind: 'richtext' },
+        { key: 'effect', label: 'Effect', kind: 'richtext' },
+        ...abilityFields('magic', 'spell', ['character']),
       ],
     },
     eventType(['place', 'realm'], ['character', 'army', 'house']),
@@ -531,12 +566,13 @@ const fantasy: BuiltInTemplate = {
       from: ['place'],
       to: ['place', 'realm'],
     },
+    ...geoLinks(['place', 'realm'], []),
     {
       label: 'holds',
       inverse: 'held by',
       kind: 'ownership',
       from: ['character'],
-      to: ['artifact'],
+      to: ['artifact', 'spell'],
     },
   ],
 };
@@ -626,25 +662,39 @@ const space: BuiltInTemplate = {
         },
       ],
     },
+    ruleSystemType('tech', 'Technology or psionics', 'Technologies and psionics', [
+      'character',
+      'faction',
+      'ship',
+    ]),
     {
-      id: 'tech',
-      name: 'Technology',
-      plural: 'Technologies',
-      icon: 'gem',
-      color: 'cat-6',
+      id: 'power',
+      name: 'Ability or device power',
+      plural: 'Abilities and device powers',
+      icon: 'star',
+      color: 'cat-5',
       group: 'Lore',
-      traits: ['ruleSystem'],
+      traits: ['ability', 'holdable'],
       fields: [
-        { key: 'principle', label: 'How it works', kind: 'richtext' },
-        { key: 'limits', label: 'Limits', kind: 'richtext' },
+        { key: 'effect', label: 'Effect', kind: 'richtext' },
+        ...abilityFields('tech', 'power', ['character', 'ship']),
       ],
     },
+    artifactType('artifact', ['character', 'ship']),
     eventType(['world'], ['character', 'ship', 'faction']),
     secretType,
   ],
   links: [
     ...kinshipLinks('character', 'faction'),
     { label: 'lies within', inverse: 'contains', kind: 'location', from: ['world'], to: ['world'] },
+    ...geoLinks(['world'], ['ship']),
+    {
+      label: 'holds',
+      inverse: 'held by',
+      kind: 'ownership',
+      from: ['character', 'ship'],
+      to: ['artifact', 'power'],
+    },
   ],
 };
 

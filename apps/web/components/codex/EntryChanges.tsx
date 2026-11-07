@@ -1,9 +1,9 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { formatStoryTime, type StoryTimeShape } from '@epic/core/calendar';
-import type { EntityDto, EntityTypeDto, FactDto } from '@epic/schemas/api';
+import { CANON_STATES, type EntityDto, type EntityTypeDto, type FactDto } from '@epic/schemas/api';
 import { Button, focusRing } from '@epic/ui';
 import { api } from '../../lib/api-client';
 import { entitiesKey, type TypesData } from '../../lib/use-types';
@@ -12,14 +12,16 @@ import { FieldInput } from './FieldInput';
 import { FieldValue } from './FieldValue';
 import { StoryDateInput } from './StoryDateInput';
 
-/** An entry's recorded changes over story time, and a form to record one (CX-3). */
+/**
+ * An entry's recorded changes over story time, and a form to record one (CX-3). Scrapped changes
+ * are listed too, so they can be restored (CX-12); they never count toward values.
+ */
 export function EntryChanges(props: {
   projectId: string;
   entry: EntityDto;
   type: EntityTypeDto;
   meta: TypesData;
   entries: EntityDto[];
-  facts: FactDto[];
   onOpen: (key: string) => void;
 }) {
   const { projectId, entry, meta } = props;
@@ -37,11 +39,23 @@ export function EntryChanges(props: {
       meta.types.find((t) => t.key === e.typeKey)?.traits.includes('event'),
   );
   const base = `/api/projects/${projectId}/facts`;
+  const factsKey = ['facts', projectId, entry.key] as const;
+  const list = useQuery({
+    queryKey: factsKey,
+    queryFn: () => api<{ facts: FactDto[] }>(`${base}?entity=${entry.key}`).then((r) => r.facts),
+  });
+  const facts = list.data ?? [];
   const refresh = () =>
     Promise.all([
+      qc.invalidateQueries({ queryKey: factsKey }),
       qc.invalidateQueries({ queryKey: worldKey(projectId) }),
       qc.invalidateQueries({ queryKey: entitiesKey(projectId) }),
     ]);
+  const mark = useMutation({
+    mutationFn: (v: { key: string; canonState: FactDto['canonState'] }) =>
+      api(`${base}/${v.key}`, { method: 'PATCH', body: { canonState: v.canonState } }),
+    onSuccess: refresh,
+  });
 
   const add = useMutation({
     mutationFn: () =>
@@ -80,15 +94,18 @@ export function EntryChanges(props: {
   return (
     <section aria-label="Changes over time" className="flex flex-col gap-2 text-sm">
       <h3 className="font-medium">Changes over time</h3>
-      {props.facts.length === 0 ? (
+      {facts.length === 0 ? (
         <p className="text-muted">No changes recorded. Values stay at their starting value.</p>
       ) : (
         <ol className="flex flex-col gap-1">
-          {props.facts.map((f) => {
+          {facts.map((f) => {
             const def = props.type.fields.find((x) => x.key === f.field);
             const date = formatStoryTime(cal, f.storyTime);
             return (
-              <li key={f.key} className="flex flex-wrap items-baseline gap-x-2">
+              <li
+                key={f.key}
+                className={`flex flex-wrap items-baseline gap-x-2 ${f.canonState === 'scrapped' ? 'text-faint line-through' : ''}`}
+              >
                 <span className="text-muted">{date}</span>
                 <span>
                   {def?.label ?? f.field}:{' '}
@@ -116,8 +133,26 @@ export function EntryChanges(props: {
                     </button>
                   </span>
                 )}
+                <select
+                  aria-label={`Canon state of the change to ${def?.label ?? f.field} at ${date}`}
+                  className={`ml-auto h-7 rounded-md bg-sunk px-1 text-xs no-underline ${focusRing}`}
+                  value={f.canonState}
+                  disabled={mark.isPending}
+                  onChange={(e) =>
+                    mark.mutate({
+                      key: f.key,
+                      canonState: e.target.value as FactDto['canonState'],
+                    })
+                  }
+                >
+                  {CANON_STATES.map((s) => (
+                    <option key={s} value={s}>
+                      {s[0]!.toUpperCase() + s.slice(1)}
+                    </option>
+                  ))}
+                </select>
                 <Button
-                  className="ml-auto h-7 text-muted"
+                  className="h-7 text-muted"
                   aria-label={`Remove change to ${def?.label ?? f.field} at ${date}`}
                   disabled={remove.isPending}
                   onClick={() => remove.mutate(f.key)}
@@ -129,9 +164,9 @@ export function EntryChanges(props: {
           })}
         </ol>
       )}
-      {remove.error && (
+      {(remove.error ?? mark.error) && (
         <p role="alert" className="text-bad">
-          {remove.error.message}
+          {(remove.error ?? mark.error)!.message}
         </p>
       )}
 

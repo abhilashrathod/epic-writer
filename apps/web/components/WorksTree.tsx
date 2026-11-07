@@ -12,10 +12,11 @@ import { useTree, useTreeMutation } from '../lib/use-tree';
 import { useEntities, useTypes } from '../lib/use-types';
 import { StoryDateInput } from './codex/StoryDateInput';
 import { FountainImport } from './FountainImport';
+import { LevelsEditor } from './LevelsEditor';
 import { NewWorkForm } from './NewWorkForm';
 import { useWorkspace } from './Workspace';
 
-// Media whose works default to screenplay text (mirrors DEFAULT_STRUCTURES; the server decides).
+// Media whose works default to screenplay text (mirrors core's contentTypeFor; the server decides).
 const SCRIPT_MEDIA = new Set(['series', 'film', 'short', 'stage', 'game']);
 
 const menuItem =
@@ -80,10 +81,46 @@ function WorkNode({
   );
   const top = work.levels[0];
   const importRef = useRef<HTMLInputElement>(null);
+  const [shaping, setShaping] = useState(false);
+  const [levels, setLevels] = useState(() =>
+    work.levels.map((l) => ({ singular: l.singular, plural: l.plural })),
+  );
+  const reshape = useTreeMutation(projectId, () =>
+    api(`/api/projects/${projectId}/works/${work.key}`, { method: 'PATCH', body: { levels } }),
+  );
   const importHere = work.levels.length === 1 && SCRIPT_MEDIA.has(work.medium);
   return (
     <section className="flex flex-col gap-1" aria-label={work.name}>
-      <p className="text-xs font-medium uppercase tracking-wide text-faint">{work.name}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-faint">{work.name}</p>
+        <button
+          className={`rounded text-xs text-faint hover:text-ink ${focusRing}`}
+          aria-expanded={shaping}
+          aria-label={`Edit the structure of ${work.name}`}
+          onClick={() => setShaping((v) => !v)}
+        >
+          Structure
+        </button>
+      </div>
+      {shaping && (
+        <div className="flex flex-col gap-2 rounded-lg bg-surface p-2">
+          <LevelsEditor levels={levels} onChange={setLevels} locked={documents.length > 0} />
+          <div className="flex gap-1">
+            <Button
+              disabled={reshape.isPending}
+              onClick={() => reshape.mutate(undefined, { onSuccess: () => setShaping(false) })}
+            >
+              Save structure
+            </Button>
+            <Button onClick={() => setShaping(false)}>Cancel</Button>
+          </div>
+          {reshape.error && (
+            <p role="alert" className="text-sm text-bad">
+              {reshape.error.message}
+            </p>
+          )}
+        </div>
+      )}
       <ul className="flex flex-col">
         {documents
           .filter((d) => d.parentKey === null)
