@@ -36,7 +36,7 @@ import {
   type Marker,
   type TextFormat,
 } from '@epic/fountain';
-import { lifeAt, resolveFields, type AsOf } from './asof';
+import { holderField, lifeAt, resolveFields, type AsOf } from './asof';
 import type { StoryTimeShape } from './calendar';
 
 export interface RuleType {
@@ -113,12 +113,6 @@ function isSubject(line: string, m: Marker): boolean {
   const before = line.slice(sentenceAt(line, m.from)[0], m.from);
   if (findMarkers(before).length || before.replace(/[\s"'(*_]/g, '') !== '') return false;
   return /^\s+\p{Ll}/u.test(line.slice(m.to));
-}
-
-/** The field holding a `holdable` entry's holder: `holderKey`, else the first time-varying reference. */
-export function holderField(type: RuleType): string | null {
-  const refs = type.fields.filter((f) => f.kind === 'entityRef');
-  return (refs.find((f) => f.key === 'holderKey') ?? refs.find((f) => f.timeVarying))?.key ?? null;
 }
 
 /** Dead as of a point: death date reached, or a time-varying enum field set to "dead". */

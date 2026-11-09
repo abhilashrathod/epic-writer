@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { holderField } from './asof';
 import {
   changedSpan,
   checkContinuityRules,
-  holderField,
   isDead,
   locateQuote,
   readableText,

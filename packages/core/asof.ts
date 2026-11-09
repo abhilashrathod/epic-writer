@@ -92,6 +92,14 @@ export function lifeFields(fields: { key: string; kind: string }[]): {
   return { born, died };
 }
 
+/** The field holding a `holdable` entry's holder: `holderKey`, else the first time-varying reference. */
+export function holderField(type: {
+  fields: { key: string; kind: string; timeVarying?: boolean }[];
+}): string | null {
+  const refs = type.fields.filter((f) => f.kind === 'entityRef');
+  return (refs.find((f) => f.key === 'holderKey') ?? refs.find((f) => f.timeVarying))?.key ?? null;
+}
+
 /** Whole years between a birth and a point in story time, or null if either is unknown. */
 export function ageAt(
   cal: CalendarShape,
