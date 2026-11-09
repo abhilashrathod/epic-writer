@@ -9,6 +9,7 @@ import type {
   Unit,
 } from '@epic/db';
 import { TEMPLATE_INFO, type TEMPLATE_KEYS } from '@epic/schemas/api';
+import { fieldAi } from '@epic/schemas';
 import type { Change } from './commit';
 
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
@@ -750,6 +751,7 @@ export function applyTemplate(t: BuiltInTemplate): {
         required: f.required ?? false,
         timeVarying: f.timeVarying ?? false,
         refTypeKeys: (f.refs ?? []).map(ref),
+        ai: fieldAi(f),
       })),
       order,
     };

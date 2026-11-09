@@ -11,6 +11,8 @@ export * from './history';
 export * from './episode-guide';
 export * from './entity-types';
 export * from './templates';
+export * from './type-catalogue';
+export * from './type-templates';
 export * from './entities';
 export * from './links';
 export * from './asof';

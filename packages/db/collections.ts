@@ -129,6 +129,8 @@ export type ProjectDoc = Plain<{
       suggestions: string;
       chat: string;
       embedding: string;
+      /** Finds names and candidate types on extraction's first pass. Absent on older projects. */
+      classification?: string;
     };
     autoRun: false;
     monthlyCapMicros: number;
@@ -251,6 +253,8 @@ export type Trait =
   | 'term'
   | 'geo';
 
+export type FieldAi = 'extract' | 'read' | 'hidden';
+
 export interface FieldDef {
   key: string;
   label: string;
@@ -259,9 +263,13 @@ export interface FieldDef {
   required: boolean;
   timeVarying: boolean;
   refTypeKeys: string[];
+  /** What the AI may do with this field. Rows from before it existed resolve through fieldAi. */
+  ai?: FieldAi;
 }
 
 export interface EntityTypeBody {
+  /** One or two sentences for extraction's first pass; older rows have none. */
+  description?: string;
   name: string;
   pluralName: string;
   icon: string;
@@ -459,6 +467,8 @@ export type ProposalOp =
   | 'createScene'
   | 'tagScene';
 
+export type ProposalFlag = 'quote-not-found' | 'value-not-in-choices' | 'no-anchor';
+
 export type ProposalDoc = BranchScoped<{
   jobId: ObjectId;
   source: {
@@ -474,7 +484,10 @@ export type ProposalDoc = BranchScoped<{
     confidence: number;
     matchCandidates: { key: string; score: number }[];
     status: string;
+    flags?: ProposalFlag[];
   }[];
+  /** Run-level notes for the reviewer, such as fields dropped by the per-entry cap. */
+  warnings?: string[];
   appliedSeq: number | null;
   model: string;
   tokensIn: number;
@@ -527,6 +540,10 @@ export type AiUsageDoc = Plain<{
   tokensIn: number;
   tokensOut: number;
   costMicros: number;
+  /** Which step of a multi-pass run this row covers. */
+  pass?: 'mentions' | 'fields';
+  /** Characters sent to the model on this pass. */
+  promptChars?: number;
   at: Date;
 }>;
 

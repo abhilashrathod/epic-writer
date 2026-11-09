@@ -38,6 +38,30 @@ export const FIELD_KINDS = [
   'composition',
 ] as const satisfies readonly FieldShape['kind'][];
 
+export const FIELD_AI = ['extract', 'read', 'hidden'] as const;
+export type FieldAiAccess = (typeof FIELD_AI)[number];
+
+const LEGACY_HIDDEN = new Set(['notes', 'castingNotes', 'costumeNotes']);
+const LEGACY_READ = new Set([
+  'role',
+  'want',
+  'need',
+  'wound',
+  'lie',
+  'voice',
+  'description',
+  'truth',
+]);
+
+/**
+ * What the AI may do with a field. Types saved before `ai` existed were all extractable, so they
+ * keep that, except fields that are the writer's own intent or private notes.
+ */
+export function fieldAi(f: { key: string; ai?: FieldAiAccess }): FieldAiAccess {
+  if (f.ai) return f.ai;
+  return LEGACY_HIDDEN.has(f.key) ? 'hidden' : LEGACY_READ.has(f.key) ? 'read' : 'extract';
+}
+
 export const storyTimeSchema = z.object({
   start: z.number().int(),
   end: z.number().int().nullable(),

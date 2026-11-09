@@ -202,6 +202,13 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - When something is ambiguous, pick the option most consistent with this file and say which you picked.
 - If you change a convention, update this file in the same change.
 
+## Type templates
+
+- "Create from template" in the codex offers the 101 types in `packages/core/type-catalogue.ts`. `applyTypeTemplate` adds a type, or only the fields an existing type lacks, in one commit. Project types match catalogue types by name.
+- Field keys the app reads stay as they are: `born`, `died`, `holderKey`, `locationKey`, `rankKey`, `strength`, `status`, `charges`.
+- Every catalogue field carries `ai` (`extract`, `read` or `hidden`). Author intent and planning are `read`; private notes are `hidden`; what a scene can state is `extract`.
+- The catalogue is public seed data: names and descriptions use generic or public-domain examples only. `docs/codex-types.md` is the design reference it was built from.
+
 ## Import, export and backups
 
 - Fountain import (IO-2): `core.importFountain` creates the script with `createDocument`, takes its title from the Fountain title page (else the file name), normalises line endings and assigns scene keys before the first save. The browser reads the file and posts it as JSON (`@epic/schemas/io`); there is no upload storage.

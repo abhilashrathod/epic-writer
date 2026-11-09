@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FIELD_KINDS, storyTimeSchema } from './entity-fields';
+import { FIELD_KINDS, storyTimeSchema, FIELD_AI } from './entity-fields';
 
 export const TEMPLATE_KEYS = ['blank', 'mythological', 'fantasy', 'space'] as const;
 
@@ -220,19 +220,21 @@ export const fieldDefInput = z.object({
   options: z.array(z.string().trim().min(1).max(80)).max(100).default([]),
   required: z.boolean().default(false),
   timeVarying: z.boolean().default(false),
-  refTypeKeys: z.array(z.string().min(1)).max(20).default([]),
+  refTypeKeys: z.array(z.string().min(1)).max(120).default([]),
+  ai: z.enum(FIELD_AI).default('read'),
 });
 
 export const entityTypeInput = z
   .object({
     name: z.string().trim().min(1, 'Name the type').max(80),
     pluralName: z.string().trim().min(1, 'Give the plural').max(80),
+    description: z.string().trim().max(400).default(''),
     icon: z.string().max(32).default('circle'),
     color: z.enum(TYPE_COLORS).default('cat-1'),
     group: z.string().trim().min(1, 'Pick a group').max(60),
     parentTypeKey: z.string().min(1).nullable().default(null),
     traits: z.array(z.enum(TRAITS)).default([]),
-    fields: z.array(fieldDefInput).max(60).default([]),
+    fields: z.array(fieldDefInput).max(150).default([]),
   })
   .superRefine((t, ctx) => {
     const seen = new Set<string>();
@@ -259,6 +261,24 @@ export type EntityTypeInput = z.infer<typeof entityTypeInput>;
 export interface EntityTypeDto extends EntityTypeInput {
   key: string;
   order: number;
+}
+
+export const applyTypeTemplateInput = z.object({ id: z.string().min(1).max(80) });
+
+/** One catalogue type in the "Create from template" picker. */
+export interface TypeTemplateDto {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  group: string;
+  templates: string[];
+  fieldCount: number;
+  /** The project type this template would extend, if it has one already. */
+  existingKey: string | null;
+  missingFieldCount: number;
+  /** Lower-case name, group, field labels and choices. */
+  search: string;
 }
 
 export const PROMINENCE = ['main', 'supporting', 'minor', 'background'] as const;
@@ -432,6 +452,7 @@ export const aiSettingsInput = z.object({
     suggestions: modelId,
     chat: modelId,
     embedding: modelId,
+    classification: modelId,
   }),
   /** 0 means no cap. */
   monthlyCapMicros: z.number().int().min(0).max(1_000_000_000),

@@ -33,6 +33,7 @@ const date = (key: string) => ({
   required: false,
   timeVarying: false,
   refTypeKeys: [],
+  ai: 'read' as const,
 });
 const person = type('person', ['born'], [date('born'), date('died')]);
 const house = type('house', ['institution']);

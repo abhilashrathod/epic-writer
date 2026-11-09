@@ -1,3 +1,4 @@
+import { fieldAi } from '@epic/schemas';
 import { ObjectId } from 'mongodb';
 import { NotFound, openProject, type ProjectContext, type VersionSummary } from '@epic/core';
 import type {
@@ -59,12 +60,13 @@ export const toEntityTypeDto = (t: EntityTypeDoc): EntityTypeDto => ({
   key: t.key,
   name: t.name,
   pluralName: t.pluralName,
+  description: t.description ?? '',
   icon: t.icon,
   color: t.color as EntityTypeDto['color'],
   group: t.group,
   parentTypeKey: t.parentTypeKey,
   traits: t.traits,
-  fields: t.fields,
+  fields: t.fields.map((f) => ({ ...f, ai: fieldAi(f) })),
   order: t.order,
 });
 

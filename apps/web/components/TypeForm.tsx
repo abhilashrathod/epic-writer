@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { holderField } from '@epic/core/asof';
 import { FIELD_KINDS } from '@epic/schemas/entity-fields';
 import { TRAITS, TYPE_COLORS, type EntityTypeDto, type EntityTypeInput } from '@epic/schemas/api';
 import { Button, Field, ICONS, Icon, TYPE_BG, focusRing } from '@epic/ui';
@@ -27,25 +28,41 @@ const KIND_LABEL: Record<FieldInput['kind'], string> = {
   composition: 'Composition (e.g. army makeup)',
 };
 
-const TRAIT_HINT: Record<(typeof TRAITS)[number], string> = {
-  born: 'Has a birth date; ages are computed',
+type Trait = (typeof TRAITS)[number];
+
+const TRAIT_HINT: Record<Trait, string> = {
+  born: 'Computes age and alive or dead; continuity catches the dead speaking',
   locatable: 'Has a location over time',
-  holdable: 'Can be held by someone',
+  holdable: 'Continuity catches someone using an item another entry holds',
   hasStrength: 'Has strength that battles change',
   ranked: 'Holds ranks or classifications',
   position: 'An office held over time',
-  institution: 'A group with members',
+  institution: 'Adds a history and diagram to its page; link its members',
   ruleSystem: 'Rules with costs and limits',
   ability: 'A power with uses and conditions',
-  event: 'Happens at a point in story time',
+  event: 'Appears on the Timeline and Episode guide',
   secret: 'Known by some, over time',
   setup: 'Planted and paid off',
   account: 'An in-world source that may disagree',
   transport: 'Moves people or things',
   resource: 'Produced and traded',
   term: 'A word in the glossary',
-  geo: 'Part of the geography',
+  geo: 'Adds a diagram to its page; link related entries',
 };
+
+// Traits the app acts on today; the rest are saved and get wired up with their features.
+const LIVE_TRAITS: Trait[] = ['born', 'holdable', 'event', 'institution', 'geo'];
+const PLANNED_TRAITS = TRAITS.filter((t) => !LIVE_TRAITS.includes(t));
+
+/** What a ticked trait still needs from the type's fields before it can do anything. */
+function missingField(t: Trait, fields: FieldInput[]): string | null {
+  const hasDate = fields.some((f) => f.kind === 'date');
+  if (t === 'born' && !hasDate) return 'Add a Story date field for the birth date.';
+  if (t === 'event' && !hasDate) return 'Add a Story date field so it can appear on the Timeline.';
+  if (t === 'holdable' && !holderField({ fields }))
+    return 'Add an Entry field marked Changes over time for the holder.';
+  return null;
+}
 
 const inputSelect = `h-9 rounded-md bg-sunk px-2 text-sm ${focusRing}`;
 
@@ -61,6 +78,7 @@ export function TypeForm(props: {
     props.existing ?? {
       name: '',
       pluralName: '',
+      description: '',
       icon: 'circle',
       color: 'cat-1',
       group: props.groups[0]?.key ?? '',
@@ -109,6 +127,7 @@ export function TypeForm(props: {
           required: false,
           timeVarying: false,
           refTypeKeys: [],
+          ai: 'read',
         },
       ],
     });
@@ -134,6 +153,30 @@ export function TypeForm(props: {
 
   const others = props.types.filter((t) => t.key !== props.existing?.key);
 
+  const traitOption = (t: Trait) => {
+    const on = draft.traits.includes(t);
+    const missing = on ? missingField(t, draft.fields) : null;
+    return (
+      <label key={t} className="flex items-start gap-2 rounded-md p-1.5 text-sm hover:bg-sunk">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) =>
+            set({
+              traits: e.target.checked ? [...draft.traits, t] : draft.traits.filter((x) => x !== t),
+            })
+          }
+          className="mt-1"
+        />
+        <span>
+          <span className="font-medium">{t}</span>{' '}
+          <span className="text-muted">· {TRAIT_HINT[t]}</span>
+          {missing && <span className="block text-warn">{missing}</span>}
+        </span>
+      </label>
+    );
+  };
+
   return (
     <form
       onSubmit={submit}
@@ -155,6 +198,21 @@ export function TypeForm(props: {
           placeholder="e.g. Characters"
           maxLength={80}
         />
+        <label className="flex flex-col gap-1.5 text-sm font-medium sm:col-span-2">
+          Description
+          <textarea
+            aria-label="Description"
+            rows={2}
+            maxLength={400}
+            value={draft.description}
+            onChange={(e) => set({ description: e.target.value })}
+            placeholder="One or two sentences: what this type is, with an example or two."
+            className={`${inputSelect} h-auto py-2 font-normal`}
+          />
+          <span className="text-xs font-normal text-muted">
+            The AI uses this to sort names in your writing into types.
+          </span>
+        </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Group
           <select
@@ -220,34 +278,11 @@ export function TypeForm(props: {
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm font-medium">Traits</legend>
-        <p className="text-sm text-muted">
-          Traits switch on system behaviour: computed ages, holders over time, continuity checks.
-        </p>
-        <div className="grid gap-1 sm:grid-cols-2">
-          {TRAITS.map((t) => (
-            <label
-              key={t}
-              className="flex items-start gap-2 rounded-md p-1.5 text-sm hover:bg-sunk"
-            >
-              <input
-                type="checkbox"
-                checked={draft.traits.includes(t)}
-                onChange={(e) =>
-                  set({
-                    traits: e.target.checked
-                      ? [...draft.traits, t]
-                      : draft.traits.filter((x) => x !== t),
-                  })
-                }
-                className="mt-1"
-              />
-              <span>
-                <span className="font-medium">{t}</span>{' '}
-                <span className="text-muted">· {TRAIT_HINT[t]}</span>
-              </span>
-            </label>
-          ))}
-        </div>
+        <p className="text-sm text-muted">Traits tell the system how to treat this type.</p>
+        <div className="grid gap-1 sm:grid-cols-2">{LIVE_TRAITS.map(traitOption)}</div>
+        <h3 className="mt-2 text-sm font-medium">Planned</h3>
+        <p className="text-sm text-muted">You can tick these now, but they do nothing yet.</p>
+        <div className="grid gap-1 sm:grid-cols-2">{PLANNED_TRAITS.map(traitOption)}</div>
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
@@ -373,6 +408,19 @@ export function TypeForm(props: {
                     onChange={(e) => setField(i, { timeVarying: e.target.checked })}
                   />{' '}
                   Changes over time
+                </label>
+                <label className="flex items-center gap-1.5">
+                  AI access
+                  <select
+                    aria-label="AI access"
+                    value={f.ai}
+                    onChange={(e) => setField(i, { ai: e.target.value as FieldInput['ai'] })}
+                    className={`${inputSelect} text-ink`}
+                  >
+                    <option value="extract">Fill from the text</option>
+                    <option value="read">Read only</option>
+                    <option value="hidden">Hidden from AI</option>
+                  </select>
                 </label>
                 <span className="ml-auto text-xs text-faint">key: {f.key}</span>
               </div>
