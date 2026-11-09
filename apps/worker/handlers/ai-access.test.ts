@@ -213,26 +213,53 @@ describe('AI field access', () => {
   }, 30_000);
 
   it('shows only narrative references already reached as of the point', async () => {
-    await createDocument(db, ctx, { workKey, parentKey: seasonKey, title: 'Late Reckoning' });
+    const lateKey = await createDocument(db, ctx, {
+      workKey,
+      parentKey: seasonKey,
+      title: 'Late Reckoning',
+    });
     const first = await readHeadByKey(db, 'documents', ctx.scope, episode);
+    const late = await readHeadByKey(db, 'documents', ctx.scope, lateKey);
     const setup = (await readHeads(db, 'entityTypes', ctx.scope)).find(
       (t) => t.name === 'Setup / Payoff',
     )!.key;
+    const place = (d: typeof first) => ({
+      workKey,
+      documentKey: d!.key,
+      sceneKey: null,
+      order: d!.orderPath,
+    });
+    const vague = {
+      workKey: null,
+      documentKey: null,
+      sceneKey: null,
+      order: null,
+      label: 'somewhere vague',
+    };
     await createEntity(db, ctx, {
       typeKey: setup,
       name: 'Bow Promise',
-      fields: { paidOffAt: ['Early Oath', 'Late Reckoning', 'somewhere vague'] },
+      fields: { paidOffAt: [place(first), place(late), vague] },
     });
     const asOf = { storyTime: null, workKey, order: `${first!.orderPath}.9999` };
     const ask = (over = {}) => run('ask', { question: 'What of Bow Promise?', asOf, ...over });
 
     await ask();
-    expect(allOutput()).toContain('Paid off at: Early Oath');
+    expect(allOutput()).toMatch(/Paid off at: [^;\n]*Early Oath/);
     expect(allOutput()).not.toMatch(/Late Reckoning|somewhere vague/);
 
     spy.sent.length = 0;
     await ask({ includePlanned: true });
-    expect(allOutput()).toContain('Paid off at: Early Oath, Late Reckoning, somewhere vague');
+    expect(allOutput()).toMatch(/Late Reckoning/);
+    expect(allOutput()).toContain('somewhere vague');
+
+    spy.sent.length = 0;
+    await run('ask', {
+      question: 'What of Bow Promise?',
+      asOf: { storyTime: null, workKey: null, order: null },
+    });
+    expect(allOutput()).toMatch(/Late Reckoning/);
+    expect(allOutput()).toContain('somewhere vague');
   }, 30_000);
 
   it('gives relevant long read fields in full and only names the others', async () => {

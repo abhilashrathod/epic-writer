@@ -232,7 +232,9 @@ export type FieldKind =
   | 'entityRefList'
   | 'image'
   | 'list'
-  | 'composition';
+  | 'composition'
+  | 'narrativeRef'
+  | 'narrativeRefList';
 
 export type Trait =
   | 'born'

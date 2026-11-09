@@ -5,9 +5,8 @@ import {
   Invalid,
   listEntityTypes,
   listLinkTypes,
+  loadNarrativeIndex,
   mentions,
-  narrativePoints,
-  narrativeRefFilter,
   PLANNED_FIELDS,
   worldSnapshot,
 } from '@epic/core';
@@ -44,11 +43,12 @@ export function makeAskHandler(mock: MockResponder = mockAsk): JobHandler {
     const { question, asOf, includePlanned } = parsed.data;
     const ai = await prepareAi(db, job, 'chat', keySecret, mock);
     const { ctx } = ai;
-    const [world, types, linkTypes, calendar] = await Promise.all([
+    const [world, types, linkTypes, calendar, narrative] = await Promise.all([
       worldSnapshot(db, ctx),
       listEntityTypes(db, ctx),
       listLinkTypes(db, ctx),
       readHeadByKey(db, 'calendars', ctx.scope, ctx.project.defaultCalendarKey),
+      loadNarrativeIndex(db, ctx),
     ]);
     const relevant = await ai.relevantFields(
       question,
@@ -57,18 +57,13 @@ export function makeAskHandler(mock: MockResponder = mockAsk): JobHandler {
       undefined,
       includePlanned ? undefined : PLANNED_FIELDS,
     );
-    const reached =
-      !includePlanned && asOf.workKey && asOf.order !== null
-        ? narrativeRefFilter(await narrativePoints(db, ctx, asOf.workKey), asOf)
-        : null;
     const cards = buildCodexContext(
-      { ...world, types, linkTypes, calendar, units: ctx.project.units },
+      { ...world, types, linkTypes, calendar, units: ctx.project.units, narrative },
       asOf,
       question,
       {
         relevantFields: relevant.fields,
         excludePlanned: !includePlanned,
-        ...(reached ? { keepNarrativeRef: reached } : {}),
       },
     );
     if (cards.length === 0) {

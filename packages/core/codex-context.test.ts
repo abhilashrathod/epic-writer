@@ -196,24 +196,65 @@ describe('buildCodexContext', () => {
       expect(out).toContain('The truth: Secretly a prince');
     });
 
-    it('filters narrative-reference items but leaves other lists alone', () => {
-      const input = withFields();
-      input.types[0]!.fields.push(
-        { key: 'paidOffAt', label: 'Paid off at', kind: 'list', ai: 'read' },
-        { key: 'skills', label: 'Skills', kind: 'list', ai: 'read' },
-      );
-      Object.assign(input.entities[0]!.fields, {
-        paidOffAt: ['Early', 'Late'],
-        skills: ['Early', 'Late'],
+    describe('narrative references', () => {
+      const place = (order: string, workKey = 'w') => ({
+        workKey,
+        documentKey: `d${order}`,
+        sceneKey: null,
+        order,
+        label: `at ${order}`,
       });
-      const out = buildCodexContext(input, END_OF_TIME, '', {
-        keepNarrativeRef: (item) => item === 'Early',
-      })
-        .map((x) => x.text)
-        .join(' ');
-      expect(out).toContain('Paid off at: Early');
-      expect(out).not.toContain('Paid off at: Early, Late');
-      expect(out).toContain('Skills: Early, Late');
+      const items = [
+        place('0001.0001'),
+        place('0001.0003'),
+        place('0001.0001', 'other'),
+        { workKey: null, documentKey: null, sceneKey: null, order: null, label: 'the finale' },
+      ];
+      const output = (asOf: AsOf, excludePlanned: boolean) => {
+        const input = withFields();
+        input.types[0]!.fields.push({
+          key: 'paidOffAt',
+          label: 'Paid off at',
+          kind: 'narrativeRefList',
+          ai: 'read',
+        });
+        input.entities[0]!.fields.paidOffAt = items;
+        return buildCodexContext(input, asOf, '', { excludePlanned })
+          .map((x) => x.text)
+          .join(' ');
+      };
+      const mid: AsOf = { storyTime: null, workKey: 'w', order: '0001.0002.9999' };
+
+      it('shows only places at or before the point, by order', () => {
+        const out = output(mid, true);
+        expect(out).toContain('Paid off at: at 0001.0001');
+        expect(out).not.toMatch(/0001\.0003|the finale|at 0001\.0001, at 0001\.0001/);
+      });
+
+      it('shows everything at the end of the story', () => {
+        expect(output(END_OF_TIME, true)).toContain('at 0001.0003');
+        expect(output(END_OF_TIME, true)).toContain('the finale');
+      });
+
+      it('shows every item when planned endings are included', () => {
+        const out = output(mid, false);
+        expect(out).toContain('at 0001.0003');
+        expect(out).toContain('the finale');
+      });
+
+      it('keeps a field not yet migrated hidden as labels, other lists untouched', () => {
+        const input = withFields();
+        input.types[0]!.fields.push(
+          { key: 'paidOffAt', label: 'Paid off at', kind: 'list', ai: 'read' },
+          { key: 'skills', label: 'Skills', kind: 'list', ai: 'read' },
+        );
+        Object.assign(input.entities[0]!.fields, { paidOffAt: ['Late'], skills: ['Late'] });
+        const out = buildCodexContext(input, mid, '', { excludePlanned: true })
+          .map((x) => x.text)
+          .join(' ');
+        expect(out).not.toContain('Paid off at');
+        expect(out).toContain('Skills: Late');
+      });
     });
 
     it('always includes the summary and current facts, however small the budget', () => {

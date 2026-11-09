@@ -19,6 +19,7 @@
     "r2:cors": "pnpm --filter @epic/core r2:cors",
     "local": "bash scripts/local.sh",
     "restore": "pnpm --filter @epic/worker restore",
+    "migrate:narrative-refs": "pnpm --filter @epic/worker migrate:narrative-refs",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {

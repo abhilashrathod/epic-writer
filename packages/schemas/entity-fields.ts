@@ -17,7 +17,9 @@ export interface FieldShape {
     | 'entityRefList'
     | 'image'
     | 'list'
-    | 'composition';
+    | 'composition'
+    | 'narrativeRef'
+    | 'narrativeRefList';
   options: string[];
   required: boolean;
 }
@@ -36,6 +38,8 @@ export const FIELD_KINDS = [
   'image',
   'list',
   'composition',
+  'narrativeRef',
+  'narrativeRefList',
 ] as const satisfies readonly FieldShape['kind'][];
 
 export const FIELD_AI = ['extract', 'read', 'hidden'] as const;
@@ -70,6 +74,27 @@ export const storyTimeSchema = z.object({
 
 const key = z.string().min(1).max(64);
 
+/**
+ * A place in a work, or only a label when nothing links it yet. `sceneKey` is null for a reference
+ * to a whole episode or chapter.
+ */
+export const narrativeRefValue = z
+  .strictObject({
+    workKey: key.nullable(),
+    documentKey: key.nullable(),
+    sceneKey: key.nullable(),
+    order: z.string().min(1).max(200).nullable(),
+    label: z.string().trim().min(1).max(10_000).optional(),
+  })
+  .refine(
+    (r) =>
+      r.workKey && r.documentKey && r.order
+        ? true
+        : !r.workKey && !r.documentKey && !r.sceneKey && !r.order && !!r.label,
+    'must name a place in a work or carry a label',
+  );
+export type NarrativeRefValue = z.infer<typeof narrativeRefValue>;
+
 function valueSchema(f: FieldShape): z.ZodType {
   switch (f.kind) {
     case 'text':
@@ -99,6 +124,10 @@ function valueSchema(f: FieldShape): z.ZodType {
       return z.array(
         z.object({ label: z.string().min(1).max(200), count: z.number().int().min(0) }),
       );
+    case 'narrativeRef':
+      return narrativeRefValue;
+    case 'narrativeRefList':
+      return z.array(narrativeRefValue);
   }
 }
 

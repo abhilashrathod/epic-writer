@@ -4,6 +4,7 @@ import { formatStoryTime, type CalendarShape, type StoryTimeShape } from '@epic/
 import type { EntityDto, EntityTypeDto } from '@epic/schemas/api';
 import { useWorkspace } from '../Workspace';
 import { assetUrl } from './EntryImages';
+import { NarrativeRefList } from './NarrativeRefList';
 
 type FieldDef = EntityTypeDto['fields'][number];
 
@@ -62,6 +63,9 @@ export function FieldValue(props: {
             .join(' · ')}
         </>
       );
+    case 'narrativeRef':
+    case 'narrativeRefList':
+      return <NarrativeRefList value={v} />;
     case 'richtext':
       return <span className="whitespace-pre-wrap">{String(v)}</span>;
     case 'image':

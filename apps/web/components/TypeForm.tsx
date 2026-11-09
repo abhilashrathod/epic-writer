@@ -26,6 +26,8 @@ const KIND_LABEL: Record<FieldInput['kind'], string> = {
   image: 'Image',
   list: 'List of text',
   composition: 'Composition (e.g. army makeup)',
+  narrativeRef: 'Place in the story',
+  narrativeRefList: 'List of places in the story',
 };
 
 type Trait = (typeof TRAITS)[number];

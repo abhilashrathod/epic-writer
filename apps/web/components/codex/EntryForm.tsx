@@ -25,6 +25,8 @@ const FULL_WIDTH_KINDS = new Set([
   'richtext',
   'list',
   'composition',
+  'narrativeRef',
+  'narrativeRefList',
   'multiEnum',
   'entityRefList',
   'date',

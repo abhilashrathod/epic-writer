@@ -250,6 +250,63 @@ describe('extraction proposals', () => {
       ...over,
     });
 
+    describe('narrative references', () => {
+      const withField = async () => {
+        const codex = await extractionCodex(db, ctx);
+        codex.types
+          .find((t) => t.name === 'Character')!
+          .fields.push({
+            key: 'keyScenes',
+            label: 'Key scenes',
+            kind: 'narrativeRefList',
+            options: [],
+            required: false,
+            timeVarying: false,
+            refTypeKeys: [],
+            ai: 'extract',
+          });
+        return codex;
+      };
+      const output = (quote: string) => ({
+        entries: [entry('Partha', { quote, fields: [field('Key scenes', 'S09E09 sc 99')] })],
+        links: [],
+        facts: [],
+      });
+      const updates = (changes: { op: string; payload: Record<string, unknown> }[]) =>
+        changes.filter((c) => c.op === 'updateField');
+
+      it('names only the scene being extracted, ignoring what the model wrote', async () => {
+        const source = await extractionSource(db, ctx, { documentKey: episode, sceneKey: 's2' });
+        const { changes } = proposalChanges(output('Arjun weeps'), await withField(), source);
+        expect(updates(changes)).toHaveLength(1);
+        expect(updates(changes)[0]!.payload.value).toEqual([
+          expect.objectContaining({ documentKey: episode, sceneKey: 's2' }),
+        ]);
+        expect(JSON.stringify(changes)).not.toContain('S09E09');
+      });
+
+      it('adds to the places already listed, and skips a scene already there', async () => {
+        const source = await extractionSource(db, ctx, { documentKey: episode, sceneKey: 's2' });
+        const codex = await withField();
+        const other = { workKey: 'w', documentKey: 'd', sceneKey: 'old', order: '1' };
+        const me = codex.entries.find((e) => e.key === arjuna)!;
+        me.fields = { ...me.fields, keyScenes: [other] };
+        const added = updates(proposalChanges(output('Arjun weeps'), codex, source).changes);
+        expect(added[0]!.payload.value).toEqual([
+          other,
+          expect.objectContaining({ sceneKey: 's2' }),
+        ]);
+        me.fields = { ...me.fields, keyScenes: [{ ...other, sceneKey: 's2' }] };
+        expect(updates(proposalChanges(output('Arjun weeps'), codex, source).changes)).toEqual([]);
+      });
+
+      it('proposes nothing when the quote sits in no scene', async () => {
+        const source = await extractionSource(db, ctx, { documentKey: episode });
+        const { changes } = proposalChanges(output('not in the text'), await withField(), source);
+        expect(updates(changes)).toEqual([]);
+      });
+    });
+
     it('proposes only extract fields, whatever the model returns', async () => {
       const p = await getProposal(
         db,

@@ -7,6 +7,7 @@ import type { TypesData } from '../../lib/use-types';
 import { useWorkspace } from '../Workspace';
 import { assetUrl } from './EntryImages';
 import { ImageUploadButton } from './ImageUploadButton';
+import { NarrativeRefInput } from './NarrativeRefInput';
 import { StoryDateInput } from './StoryDateInput';
 
 type FieldDef = EntityTypeDto['fields'][number];
@@ -224,6 +225,10 @@ export function FieldInput(props: {
       );
       break;
     }
+    case 'narrativeRef':
+    case 'narrativeRefList':
+      control = <NarrativeRefInput field={f} value={value} onChange={onChange} />;
+      break;
     case 'list':
       control = (
         <textarea

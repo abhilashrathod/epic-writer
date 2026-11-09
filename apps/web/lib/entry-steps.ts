@@ -64,7 +64,8 @@ const SECTION_OF = new Map(
 const GENERIC_ORDER = ['Key facts', 'Connections', 'Write-up', 'Changes over time'];
 function genericSection(f: FieldDef): string {
   if (f.timeVarying) return 'Changes over time';
-  if (f.kind === 'entityRef' || f.kind === 'entityRefList') return 'Connections';
+  if (['entityRef', 'entityRefList', 'narrativeRef', 'narrativeRefList'].includes(f.kind))
+    return 'Connections';
   if (f.kind === 'richtext' || f.kind === 'list' || f.kind === 'composition') return 'Write-up';
   return 'Key facts';
 }

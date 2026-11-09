@@ -19,7 +19,7 @@ import {
 import { addCosts, prepareAi } from '../ai';
 import type { JobHandler } from '../handlers';
 
-export const PROMPT_VERSION = 'extract-2';
+export const PROMPT_VERSION = 'extract-3';
 
 const MENTION_SYSTEM = `You list what a writer's text names: characters, places, groups, objects and events.
 Task: mentions.
@@ -42,6 +42,9 @@ type CodexType = ExtractionCodex['types'][number];
 type CodexField = CodexType['fields'][number];
 
 function describeField(f: CodexField): string {
+  // The value is ignored: the app links the scene the quote is in.
+  if (f.kind === 'narrativeRef' || f.kind === 'narrativeRefList')
+    return `${f.label} (only if this scene does it; answer "this scene")`;
   const opts = f.options.length ? `: ${f.options.join(' | ')}` : '';
   return `${f.label} (${f.kind}${opts}${f.timeVarying ? ', changes over time' : ''})`;
 }

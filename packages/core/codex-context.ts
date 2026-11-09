@@ -1,6 +1,13 @@
 // Pure: turns the codex into compact text cards for an AI prompt, resolved "as of" a point (AI-8).
 // Only what applies at that point goes in, so an answer can't leak what the reader hasn't reached.
 
+import {
+  describeNarrativeRef,
+  isNarrativeRefKind,
+  narrativeItems,
+  narrativeRefReached,
+  type NarrativeIndex,
+} from './narrative-refs';
 import { lifeAt, lifeFields, resolveFields, timedStatus, type AsOf } from './asof';
 import { fieldAi, type FieldAiAccess } from '@epic/schemas';
 import { formatStoryTime, type CalendarShape, type StoryTimeShape } from './calendar';
@@ -63,6 +70,8 @@ export interface ContextLinkType {
 }
 
 export interface CodexContextInput {
+  /** Names places in the story and keeps their order current. */
+  narrative?: NarrativeIndex;
   entities: ContextEntity[];
   links: ContextLink[];
   facts: ContextFact[];
@@ -90,7 +99,7 @@ export const PLANNED_FIELDS = new Set([
   'arcSummary',
   'turningPoints',
 ]);
-/** Free-text lists naming places in a work. Ask shows only the items already reached. */
+/** Catalogue fields that name places in a work. A project not yet migrated has them as lists. */
 export const NARRATIVE_REF_FIELDS = new Set([
   'shownOnScreen',
   'plantedNarrative',
@@ -179,7 +188,6 @@ export function buildCodexContext(
     maxChars?: number;
     relevantFields?: string[];
     excludePlanned?: boolean;
-    keepNarrativeRef?: (item: string) => boolean;
   } = {},
 ): CodexCard[] {
   const { maxCards = 40, maxChars = 24_000 } = opts;
@@ -233,11 +241,15 @@ export function buildCodexContext(
       if (f.key === hidden || fieldAi(f) === 'hidden') return [];
       if (opts.excludePlanned && PLANNED_FIELDS.has(f.key)) return [];
       const raw = values[f.key];
-      const value =
-        opts.keepNarrativeRef && NARRATIVE_REF_FIELDS.has(f.key) && Array.isArray(raw)
-          ? raw.filter((item) => opts.keepNarrativeRef!(String(item)))
-          : raw;
-      const v = formatValue(f.kind, value, input, names);
+      const refs =
+        isNarrativeRefKind(f.kind) || (f.kind === 'list' && NARRATIVE_REF_FIELDS.has(f.key))
+          ? narrativeItems(raw).filter(
+              (r) => !opts.excludePlanned || narrativeRefReached(r, asOf, input.narrative),
+            )
+          : null;
+      const v = refs
+        ? refs.map((r) => describeNarrativeRef(r, input.narrative)).join(', ') || null
+        : formatValue(f.kind, raw, input, names);
       if (v === null) return [];
       const rank = relevance.get(fieldRef(e.key, f.key));
       return [{ f, v, rank, text: `${f.label}: ${v}` }];

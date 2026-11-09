@@ -35,6 +35,8 @@ A type left out of a template can still be added to any project; templates are o
 | image | `image` | |
 | list | `list` | Several free-text items |
 | composition | `composition` | Rows of `{ label, count }` (army makeup, crew) |
+| narrative ref | `narrativeRef` | One place in a work: episode or chapter, optionally a scene, with an optional label |
+| narrative ref list | `narrativeRefList` | Several such places. An item with only a label needs a scene link |
 
 **⏱** marks a field that **changes over story time**. Its changes are stored as `facts`, so a card shows the value "as of" any point. The value on the card itself is the starting value.
 
@@ -1199,7 +1201,7 @@ Ganga's departure, the Terrible Vow, the dice game, the burning of the lac house
 | Witnesses | →→ Character | Feeds knowledge tracking |
 | Who knows the truth ⏱ | links | `knows` links |
 | Accounts | →→ Account / Source | Conflicting versions |
-| Shown on screen | narrative refs | Where each work reveals it |
+| Shown on screen | narrative ref list | Where each work reveals it |
 | Remembered as | long text | How later generations tell it |
 
 ### 59. Era / Age
@@ -1230,8 +1232,8 @@ Prophecies about Bhishma's death, Karna's fate, the birth of Kali Yuga; the Prin
 | Interpretations | list | Each believed by different people |
 | About | →→ Character, Kingdom / Nation, Era | |
 | True meaning | long text | Writer's truth |
-| Planted (narrative) | narrative refs | Where the audience first hears it |
-| Hinted | narrative refs | |
+| Planted (narrative) | narrative ref list | Where the audience first hears it |
+| Hinted | narrative ref list | |
 | Fulfilled ⏱ | choice [pending, fulfilled, failed, subverted, self-fulfilling] | Feeds unpaid-setup checks |
 | Fulfilled by | → Historical event | |
 | Engineered by | → Order / Society, Character | Bene Gesserit Missionaria Protectiva |
@@ -1832,7 +1834,7 @@ Dharma vs. duty, the cost of a vow, power and legitimacy, colonialism, ecology, 
 | Question it asks | text | |
 | Expressed through | →→ Character, Storyline, Motif | |
 | Counter-argument | long text | Who embodies the other side |
-| Key scenes | narrative refs | Tagged scenes show where it recurs |
+| Key scenes | narrative ref list | Tagged scenes show where it recurs |
 | Works | →→ Work | Themes can differ by telling |
 
 ### 95. Motif / Recurring image
@@ -1844,7 +1846,7 @@ Narrative motifs, not in-world symbols: falling petals at vows, rivers as mother
 | Description | long text | |
 | Meaning | long text | |
 | Tied to | →→ Theme, Character | |
-| Appearances | narrative refs | |
+| Appearances | narrative ref list | |
 | Visual treatment | long text | For screen: colour, framing, sound |
 
 ### 96. Setup / Payoff
@@ -1854,10 +1856,10 @@ Chekhov's guns: Karna's armour, the Chakravyuha knowledge gap, Shikhandi's birth
 | Field | Kind | Notes |
 | --- | --- | --- |
 | What is planted | long text | |
-| Planted at | narrative refs | Per work |
-| Hints / reminders | narrative refs | |
+| Planted at | narrative ref list | Per work |
+| Hints / reminders | narrative ref list | |
 | Payoff | long text | Planned payoff |
-| Paid off at | narrative refs | Empty = unpaid; flagged near a finale |
+| Paid off at | narrative ref list | Empty = unpaid; flagged near a finale |
 | Related entries | →→ any | |
 | Status ⏱ | choice [planted, hinted, paid off, dropped, subverted] | |
 | Audience knowledge | text | What viewers know at each stage |
@@ -1872,8 +1874,8 @@ Who is Karna's mother? Who poisoned Jon Arryn? Who sent the assassin? What are t
 | Answer | long text | Writer's truth |
 | Clues | list | With narrative refs |
 | Red herrings | list | |
-| Raised at | narrative refs | |
-| Answered at | narrative refs | |
+| Raised at | narrative ref list | |
+| Answered at | narrative ref list | |
 | Characters investigating ⏱ | →→ Character | |
 | Status ⏱ | choice [open, partly answered, solved, abandoned] | |
 
@@ -1887,7 +1889,7 @@ Karna is Kunti's son; Shikhandi's origin; Jon is a Targaryen; Cersei's children;
 | About | →→ any | |
 | Kept by ⏱ | →→ Character | |
 | Known to ⏱ | links | `knows` links with story time; flags characters acting on knowledge they don't have yet |
-| Revealed to audience at | narrative refs | Can differ from when characters learn it |
+| Revealed to audience at | narrative ref list | Can differ from when characters learn it |
 | Revealed in-world at | → Historical event | |
 | Evidence | list | |
 | Cost if revealed | long text | |

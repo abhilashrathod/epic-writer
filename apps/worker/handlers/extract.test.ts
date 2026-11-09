@@ -75,7 +75,7 @@ describe('extract handler', () => {
     expect(spend.byTask.extraction).toBeGreaterThanOrEqual(0);
     expect(await col(db, 'aiUsage').findOne({ jobId: job._id })).toMatchObject({
       task: 'extraction',
-      promptVersion: 'extract-2',
+      promptVersion: 'extract-3',
     });
   });
 

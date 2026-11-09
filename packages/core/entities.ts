@@ -12,6 +12,8 @@ import { requireImageAssets } from './assets';
 import { commit, versionBody, type Change } from './commit';
 import { Invalid, NotFound } from './errors';
 import { saveWorkingText } from './save';
+import { loadNarrativeIndex } from './narrative-index';
+import { canonicalNarrativeRef, isNarrativeRefKind, narrativeItems } from './narrative-refs';
 import type { ProjectContext } from './works';
 
 const author = (ctx: ProjectContext) => ({ kind: 'user' as const, userId: ctx.userId });
@@ -76,6 +78,19 @@ async function validate(
   );
   const imageIds = [...imageFieldIds, ...(input.images ?? []).map((i) => i.assetId)];
   if (imageIds.length) await requireImageAssets(db, ctx, imageIds);
+
+  const placeFields = type.fields.filter((f) => isNarrativeRefKind(f.kind) && fields[f.key]);
+  if (placeFields.length) {
+    const index = await loadNarrativeIndex(db, ctx);
+    for (const f of placeFields) {
+      const places = narrativeItems(fields[f.key]).map((r) => {
+        const place = canonicalNarrativeRef(r, index);
+        if (!place) throw new Invalid(`"${f.label}" points to a place that no longer exists`);
+        return place;
+      });
+      fields[f.key] = f.kind === 'narrativeRef' ? places[0] : places;
+    }
+  }
 
   const refs = type.fields.flatMap((f) => {
     const v = fields[f.key];

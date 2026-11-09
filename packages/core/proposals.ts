@@ -38,6 +38,7 @@ import { commitInSession, type Change } from './commit';
 import { entityChange, takenSlugs, type PendingEntities } from './entities';
 import { Conflict, DomainError, Invalid, NotFound } from './errors';
 import { factChange } from './facts';
+import { isNarrativeRefKind } from './narrative-refs';
 import { matchCandidates, nameScore, normaliseName, STRONG_MATCH } from './identity';
 import { linkChange } from './links';
 import type { ProjectContext } from './works';
@@ -258,6 +259,17 @@ function coerce(
   }
 }
 
+/**
+ * A narrative-ref field can only name the scene the evidence is in; the model's text is ignored so
+ * it can't invent a place. A list keeps what it has, and a scene already listed proposes nothing.
+ */
+function sceneRefValue(f: FieldDef, at: NarrativeRef | undefined, current: unknown): Coerced {
+  if (!at) return undefined;
+  if (f.kind === 'narrativeRef') return { value: at };
+  const list = Array.isArray(current) ? (current as { sceneKey: string | null }[]) : [];
+  return list.some((r) => r.sceneKey === at.sceneKey) ? undefined : { value: [...list, at] };
+}
+
 const fieldNamed = (type: EntityTypeDoc | undefined, name: string) => {
   const n = normaliseName(name);
   return type?.fields.find((f) => normaliseName(f.key) === n || normaliseName(f.label) === n);
@@ -346,6 +358,14 @@ export function proposalChanges(
     });
   };
 
+  const onlyScene = source.scenes.length === 1 ? source.scenes[0]!.ref : undefined;
+  const placeOf = (quote: string) => {
+    const q = collapse(quote);
+    return (
+      (q ? source.scenes.find((s) => collapse(s.text).includes(q))?.ref : undefined) ?? onlyScene
+    );
+  };
+
   // Pass 2: entries.
   for (const { e, names, candidates, existing, type, ref } of decided) {
     const fields: Record<string, { value: unknown; confidence: number }> = {};
@@ -357,7 +377,11 @@ export function proposalChanges(
       );
     for (const { field, value, confidence } of ranked.slice(0, MAX_FIELDS_PER_ENTRY)) {
       const f = extractable(type, field);
-      const v = f && coerce(f, value, resolveName, codex);
+      const v =
+        f &&
+        (isNarrativeRefKind(f.kind)
+          ? sceneRefValue(f, placeOf(e.quote), existing?.fields[f.key])
+          : coerce(f, value, resolveName, codex));
       if (!f || !v || v.value === ref) continue;
       if (v.notInChoices) outOfChoices.push({ key: f.key, value: v.value, confidence });
       else fields[f.key] = { value: v.value, confidence };
@@ -414,13 +438,6 @@ export function proposalChanges(
     start: 0,
     end: null,
     precision: 'unknown',
-  };
-  const onlyScene = source.scenes.length === 1 ? source.scenes[0]!.ref : undefined;
-  const placeOf = (quote: string) => {
-    const q = collapse(quote);
-    return (
-      (q ? source.scenes.find((s) => collapse(s.text).includes(q))?.ref : undefined) ?? onlyScene
-    );
   };
   for (const f of out.facts) {
     const entity = resolveName(f.entry);

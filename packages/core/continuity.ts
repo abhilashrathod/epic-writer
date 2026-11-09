@@ -26,6 +26,7 @@ import {
 } from './continuity-rules';
 import { NotFound } from './errors';
 import { worldSnapshot } from './facts';
+import { loadNarrativeIndex } from './narrative-index';
 import { getWorkingText, type ProjectContext } from './works';
 
 export interface ContinuityRun {
@@ -57,13 +58,14 @@ export async function prepareContinuity(
   ) => Promise<string[]>,
 ): Promise<ContinuityRun> {
   const { document, text } = await getWorkingText(db, ctx, documentKey);
-  const [world, types, linkTypes, sceneRows, project, calendar] = await Promise.all([
+  const [world, types, linkTypes, sceneRows, project, calendar, narrative] = await Promise.all([
     worldSnapshot(db, ctx),
     readHeads(db, 'entityTypes', ctx.scope),
     readHeads(db, 'linkTypes', ctx.scope),
     scenes.listForDocument(db, { ...ctx.scope, documentKey }),
     projects.findById(db, ctx.project._id),
     readHeadByKey(db, 'calendars', ctx.scope, ctx.project.defaultCalendarKey),
+    loadNarrativeIndex(db, ctx),
   ]);
   const ruleWorld: RuleWorld = { types, entities: world.entities, facts: world.facts };
   const sceneTimes = Object.fromEntries(
@@ -96,7 +98,15 @@ export async function prepareContinuity(
     ? await retrieve(text, world.entities, types, new Set(entries.map((e) => e.key)))
     : [];
   const lines = buildCodexContext(
-    { ...world, entities: entries, types, linkTypes, calendar, units: ctx.project.units },
+    {
+      ...world,
+      entities: entries,
+      types,
+      linkTypes,
+      calendar,
+      units: ctx.project.units,
+      narrative,
+    },
     asOf,
     text,
     { maxCards: MAX_CONTEXT_ENTRIES, relevantFields },
