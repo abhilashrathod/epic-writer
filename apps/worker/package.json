@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env main.ts",
     "start": "tsx main.ts",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "restore": "tsx --env-file=../../.env scripts/restore.ts"
   },
   "dependencies": {
     "@epic/ai": "workspace:*",

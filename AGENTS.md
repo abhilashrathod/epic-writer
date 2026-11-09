@@ -97,6 +97,8 @@ pnpm lint                   eslint
 pnpm test                   vitest (needs local mongo for integration tests)
 pnpm test:e2e               playwright
 pnpm build                  production build of web + worker
+pnpm local                  everyday local use: mongo, build, web + worker, nightly backups
+pnpm restore <file> [--replace]  restore a project from a backup (.json or .json.gz)
 ```
 
 Before you say a task is done, run `pnpm typecheck && pnpm lint && pnpm test` and report the result. Don't claim something works without running it.
@@ -128,6 +130,7 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 
 - Next 16: route protection lives in `apps/web/proxy.ts` (Next renamed `middleware.ts` to `proxy.ts`). It must export a function declaration named `proxy`. Still check the user inside every route handler and server action (`requireUser()`); the proxy alone isn't enough.
 - One `.env` at the repo root serves web and worker; `next.config.ts` loads it.
+- `next start` (production) needs `AUTH_URL` (or `AUTH_TRUST_HOST`) or Auth.js throws `UntrustedHost`; `next dev` trusts localhost by itself. `pnpm local` sets `AUTH_URL=http://localhost:3000` unless `.env` has one; a host sets it to the public URL.
 - Env is validated lazily (`getEnv()` in `apps/web/lib/server.ts`), so `next build` needs no secrets. Anything that reads the session calls `currentUser()`, which marks the route dynamic.
 - Route handlers wrap their body in `handle()` (`lib/http.ts`), which maps `DomainError`/Zod/401 errors to JSON `{ error }` and hides internals.
 - E2E: Playwright runs `next dev` with `E2E_AUTH_BYPASS=1`, which signs in a fixed test user. It is ignored when `NODE_ENV=production`. Stop `pnpm dev` before `pnpm test:e2e`; both use `apps/web/.next`.
@@ -204,6 +207,7 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - Fountain import (IO-2): `core.importFountain` creates the script with `createDocument`, takes its title from the Fountain title page (else the file name), normalises line endings and assigns scene keys before the first save. The browser reads the file and posts it as JSON (`@epic/schemas/io`); there is no upload storage.
 - Fountain/Markdown export (IO-3): `core.exportDocumentText` strips identity markers with `stripMarkers`; Fountain files start with a `Title:` page so they re-import under the same title.
 - Backups (IO-7): `core.exportProject` returns every row of every project-scoped collection (`PROJECT_COLLECTIONS` in `packages/db/backup.ts`), all versions, as EJSON. It never includes `users` (AI keys) or `templates`; only the owner's name. Download it from project settings.
+- Restore (IO-7): `pnpm restore <file>` (`apps/worker/scripts/restore.ts` → `core.restoreProject`) puts a project back with every version, owned by `ALLOWED_GITHUB_LOGIN` (who must have signed in once). It refuses an existing project unless `--replace`, which first saves the current state as `before-restore-*.json.gz` beside the backups. Queued or running jobs come back failed, so no AI runs on its own.
 - Nightly backups: the worker enqueues one `export` job per project per 24h (checked every 10 minutes) and writes `BACKUP_DIR/<projectId>/<YYYY-MM-DD>.json.gz`, keeping the newest 14. `BACKUP_DIR` must be absolute and outside the repo; unset turns nightly backups off. Never commit backups: this repo is public.
 
 ## Uploads and project settings

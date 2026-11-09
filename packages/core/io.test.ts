@@ -3,7 +3,7 @@ import { BSON, ObjectId, type Db } from 'mongodb';
 import { col, PROJECT_COLLECTIONS, scenes, users } from '@epic/db';
 import { createTestDb } from '@epic/db/testing';
 import { createProject } from './create-project';
-import { Invalid } from './errors';
+import { Conflict, Invalid } from './errors';
 import {
   BACKUP_FORMAT,
   exportDocumentText,
@@ -11,6 +11,8 @@ import {
   exportProjectJson,
   importFountain,
   normaliseText,
+  parseBackup,
+  restoreProject,
   safeFileName,
   type ProjectBackup,
 } from './io';
@@ -199,5 +201,38 @@ describe('exportProject', () => {
     const backup = await exportProject(db, ctx);
     for (const rows of Object.values(backup.collections))
       for (const r of rows) expect((r.projectId as ObjectId).equals(other._id)).toBe(false);
+  });
+});
+
+describe('restoreProject', () => {
+  it('brings a lost project back for a new owner, and replaces only when asked', async () => {
+    await renameDocument(db, ctx, season, 'Book One');
+    const backup = parseBackup(await exportProjectJson(db, ctx));
+    expect(() => parseBackup('{"format":"other"}')).toThrow(Invalid);
+    expect(() => parseBackup('not json')).toThrow(Invalid);
+
+    // A queued job in the backup must not run again after the restore.
+    backup.collections.jobs.push({
+      _id: new ObjectId(),
+      projectId: ctx.project._id,
+      type: 'extract',
+      status: 'queued',
+    });
+    // Lose everything, as if the database were wiped, then restore for a new account.
+    const id = ctx.project._id;
+    await col(db, 'projects').deleteOne({ _id: id });
+    for (const c of PROJECT_COLLECTIONS) await db.collection(c).deleteMany({ projectId: id });
+    const owner = new ObjectId();
+    const { rows } = await restoreProject(db, backup, { ownerId: owner });
+    expect(rows).toBeGreaterThan(0);
+
+    const restored = await openProject(db, id, owner);
+    expect((await getTree(db, restored)).documents.map((d) => d.title)).toContain('Book One');
+    expect(await col(db, 'jobs').findOne({ projectId: id, status: 'queued' })).toBeNull();
+
+    await expect(restoreProject(db, backup, { ownerId: owner })).rejects.toBeInstanceOf(Conflict);
+    await renameDocument(db, restored, season, 'Changed later');
+    await restoreProject(db, backup, { ownerId: owner, replace: true });
+    expect((await getTree(db, restored)).documents.map((d) => d.title)).toContain('Book One');
   });
 });

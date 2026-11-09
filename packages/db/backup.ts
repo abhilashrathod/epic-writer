@@ -1,6 +1,6 @@
-import type { Db, Document, ObjectId } from 'mongodb';
+import type { ClientSession, Db, Document, ObjectId } from 'mongodb';
 import { col } from './client';
-import { VERSIONED_COLLECTIONS, type JobStatus } from './collections';
+import { VERSIONED_COLLECTIONS, type JobStatus, type ProjectDoc } from './collections';
 
 /**
  * Every collection whose rows belong to one project, besides `projects` itself. `users` (AI keys)
@@ -34,6 +34,29 @@ export const backups = {
   async userName(db: Db, id: ObjectId): Promise<string | null> {
     const u = await col(db, 'users').findOne({ _id: id }, { projection: { name: 1 } });
     return u?.name ?? null;
+  },
+
+  /**
+   * Replaces everything a project owns with `rows` (a restore, IO-7), inside the caller's
+   * transaction. Rows keep their ids, versions and history.
+   */
+  async replaceProject(
+    db: Db,
+    project: ProjectDoc,
+    rows: Partial<Record<ProjectCollection, Document[]>>,
+    session: ClientSession,
+  ): Promise<number> {
+    const projectId = project._id;
+    await col(db, 'projects').deleteOne({ _id: projectId }, { session });
+    let n = 0;
+    for (const name of PROJECT_COLLECTIONS) {
+      await db.collection(name).deleteMany({ projectId }, { session });
+      const list = (rows[name] ?? []).filter((r) => projectId.equals(r.projectId as ObjectId));
+      if (list.length) await db.collection(name).insertMany(list, { session });
+      n += list.length;
+    }
+    await col(db, 'projects').insertOne(project, { session });
+    return n;
   },
 
   listProjects: (db: Db) =>

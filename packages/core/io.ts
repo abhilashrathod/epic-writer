@@ -1,4 +1,4 @@
-import { BSON, type Db, type Document } from 'mongodb';
+import { BSON, type Db, type Document, type ObjectId } from 'mongodb';
 import { v7 as uuidv7 } from 'uuid';
 import {
   backups,
@@ -9,7 +9,7 @@ import {
   type ProjectDoc,
 } from '@epic/db';
 import { assignSceneKeys, splitTitlePage, stripMarkers } from '@epic/fountain';
-import { Invalid, NotFound } from './errors';
+import { Conflict, Invalid, NotFound } from './errors';
 import { saveWorkingText } from './save';
 import { createDocument, getWorkingText, type ProjectContext } from './works';
 
@@ -127,4 +127,66 @@ export async function exportProject(db: Db, ctx: { project: ProjectDoc }): Promi
 /** The backup as Extended JSON, so ObjectIds and Dates survive a restore. */
 export async function exportProjectJson(db: Db, ctx: { project: ProjectDoc }): Promise<string> {
   return BSON.EJSON.stringify(await exportProject(db, ctx));
+}
+
+/** Reads a backup file's text (Extended JSON) and checks it is an Epic Writer backup. */
+export function parseBackup(json: string): ProjectBackup {
+  let data: unknown;
+  try {
+    data = BSON.EJSON.parse(json);
+  } catch {
+    throw new Invalid('That file isn’t valid backup JSON');
+  }
+  const b = data as Partial<ProjectBackup>;
+  if (b?.format !== BACKUP_FORMAT || !b.project || !b.collections)
+    throw new Invalid('That file isn’t an Epic Writer backup');
+  if (b.version !== BACKUP_VERSION)
+    throw new Invalid(`Backup version ${String(b.version)} isn’t supported by this version`);
+  return b as ProjectBackup;
+}
+
+/**
+ * Restores a project from a backup (IO-7), every version and its history, owned by `ownerId`.
+ * Refuses when the project exists unless `replace` (the caller saves the current state first).
+ * Jobs that were queued or running come back failed, so no AI runs on its own after a restore.
+ */
+export async function restoreProject(
+  db: Db,
+  backup: ProjectBackup,
+  opts: { ownerId: ObjectId; replace?: boolean },
+): Promise<{ projectId: ObjectId; rows: number }> {
+  const project: ProjectDoc = {
+    ...backup.project,
+    ownerId: opts.ownerId,
+    members: [{ userId: opts.ownerId, role: 'owner' }],
+  };
+  if ((await projects.findById(db, project._id)) && !opts.replace)
+    throw new Conflict(
+      `"${project.name}" already exists here. Restore with --replace to overwrite it.`,
+    );
+  const now = new Date();
+  const rows = {
+    ...backup.collections,
+    jobs: (backup.collections.jobs ?? []).map((j) =>
+      j.status === 'queued' || j.status === 'running'
+        ? {
+            ...j,
+            status: 'failed',
+            error: 'Interrupted by a restore',
+            lockedBy: null,
+            lockedUntil: null,
+            updatedAt: now,
+          }
+        : j,
+    ),
+  };
+  const session = db.client.startSession();
+  try {
+    const n = await session.withTransaction(() =>
+      backups.replaceProject(db, project, rows, session),
+    );
+    return { projectId: project._id, rows: n };
+  } finally {
+    await session.endSession();
+  }
 }
