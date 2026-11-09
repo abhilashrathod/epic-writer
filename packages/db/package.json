@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "db:indexes": "tsx scripts/create-indexes.ts"
+    "db:indexes": "tsx --env-file-if-exists=../../.env scripts/create-indexes.ts"
   },
   "dependencies": {
     "@epic/schemas": "workspace:*",
