@@ -17,6 +17,11 @@ test('build a series in the works tree: add, rename, reorder, delete', async ({
   await works.getByRole('button', { name: '+ Add season' }).click();
   await works.getByRole('button', { name: '+ Add season' }).click();
   await works.getByRole('button', { name: 'Actions for Season 1' }).click();
+  // The sidebar is a z-20 flex item; a menu stacked below it opens invisibly, yet clicks still land.
+  const menuZ = await page
+    .getByRole('menu')
+    .evaluate((m) => Number(getComputedStyle(m.parentElement ?? m).zIndex) || 0);
+  expect(menuZ).toBeGreaterThan(20);
   await page.getByRole('menuitem', { name: 'Add episode' }).click();
   await expect(works.getByRole('link', { name: 'Episode 1' })).toBeVisible();
 

@@ -258,7 +258,7 @@ function DocNode(props: {
             <Menu.Portal>
               <Menu.Content
                 align="end"
-                className="min-w-40 rounded-xl bg-panel p-1.5 text-ink shadow-lg"
+                className="z-50 min-w-40 rounded-xl bg-panel p-1.5 text-ink shadow-lg"
               >
                 {childLevel && (
                   <Menu.Item className={menuItem} onSelect={() => props.onAdd(doc.key)}>

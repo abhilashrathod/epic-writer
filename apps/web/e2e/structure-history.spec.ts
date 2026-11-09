@@ -40,7 +40,7 @@ test('a work with its own structure levels, renamed later (WK-2)', async ({ page
   await page.getByLabel('Level 1 plural').fill('Books');
   await page.getByLabel('Level 2 name').fill('Part');
   await page.getByLabel('Level 2 plural').fill('Parts');
-  await expect(page.getByText('Structure: Book → Part → Chapter')).toBeVisible();
+  await expect(page.getByText('Book → Part → Chapter')).toBeVisible();
   await page.getByRole('button', { name: 'Create work' }).click();
 
   const works = page.getByRole('complementary', { name: 'Works' });
