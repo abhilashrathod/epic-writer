@@ -96,7 +96,7 @@ export function AskCodex() {
             onChange={(e) => setIncludePlanned(e.target.checked)}
           />{' '}
           Include planned endings
-          <span className="text-xs text-muted">Fate, true meanings, payoffs and answers</span>
+          <span className="text-xs text-muted">Fate, arcs, turning points, payoffs and answers</span>
         </label>
         <div className="flex items-center gap-3">
           <Button type="submit" variant="primary" disabled={running || !question.trim()}>

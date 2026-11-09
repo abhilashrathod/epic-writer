@@ -177,6 +177,45 @@ describe('buildCodexContext', () => {
       expect(run(true)).not.toMatch(/Fate|Falls at the ford/);
     });
 
+    it('hides arcs and turning points by default but keeps the truth of a secret', () => {
+      const input = withFields();
+      input.types[0]!.fields.push(
+        { key: 'arcSummary', label: 'Arc summary', kind: 'text', ai: 'read' },
+        { key: 'turningPoints', label: 'Turning points', kind: 'list', ai: 'read' },
+        { key: 'theTruth', label: 'The truth', kind: 'text', ai: 'read' },
+      );
+      Object.assign(input.entities[0]!.fields, {
+        arcSummary: 'Rises then falls',
+        turningPoints: ['The oath'],
+        theTruth: 'Secretly a prince',
+      });
+      const out = buildCodexContext(input, END_OF_TIME, '', { excludePlanned: true })
+        .map((x) => x.text)
+        .join(' ');
+      expect(out).not.toMatch(/Rises then falls|The oath|Arc summary|Turning points/);
+      expect(out).toContain('The truth: Secretly a prince');
+    });
+
+    it('filters narrative-reference items but leaves other lists alone', () => {
+      const input = withFields();
+      input.types[0]!.fields.push(
+        { key: 'paidOffAt', label: 'Paid off at', kind: 'list', ai: 'read' },
+        { key: 'skills', label: 'Skills', kind: 'list', ai: 'read' },
+      );
+      Object.assign(input.entities[0]!.fields, {
+        paidOffAt: ['Early', 'Late'],
+        skills: ['Early', 'Late'],
+      });
+      const out = buildCodexContext(input, END_OF_TIME, '', {
+        keepNarrativeRef: (item) => item === 'Early',
+      })
+        .map((x) => x.text)
+        .join(' ');
+      expect(out).toContain('Paid off at: Early');
+      expect(out).not.toContain('Paid off at: Early, Late');
+      expect(out).toContain('Skills: Early, Late');
+    });
+
     it('always includes the summary and current facts, however small the budget', () => {
       const out = text([]);
       expect(out).toContain('Summary: A prince.');

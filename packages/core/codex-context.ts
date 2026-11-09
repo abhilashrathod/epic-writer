@@ -81,7 +81,29 @@ export interface CodexCard {
 const PROMINENCE_RANK: Record<string, number> = { main: 0, supporting: 1, minor: 2, background: 3 };
 const NOTE_MAX = 120;
 /** The writer's planned outcomes. Ask leaves them out unless the question opts in. */
-export const PLANNED_FIELDS = new Set(['fate', 'trueMeaning', 'payoff', 'answer', 'writerSNote']);
+export const PLANNED_FIELDS = new Set([
+  'fate',
+  'trueMeaning',
+  'payoff',
+  'answer',
+  'writerSNote',
+  'arcSummary',
+  'turningPoints',
+]);
+/** Free-text lists naming places in a work. Ask shows only the items already reached. */
+export const NARRATIVE_REF_FIELDS = new Set([
+  'shownOnScreen',
+  'plantedNarrative',
+  'hinted',
+  'keyScenes',
+  'appearances',
+  'plantedAt',
+  'hintsReminders',
+  'paidOffAt',
+  'raisedAt',
+  'answeredAt',
+  'revealedToAudienceAt',
+]);
 const CHARS_PER_TOKEN = 4;
 /** Room for optional fields on a card. Entries the question is about get more. */
 const CARD_TOKENS = 400;
@@ -157,6 +179,7 @@ export function buildCodexContext(
     maxChars?: number;
     relevantFields?: string[];
     excludePlanned?: boolean;
+    keepNarrativeRef?: (item: string) => boolean;
   } = {},
 ): CodexCard[] {
   const { maxCards = 40, maxChars = 24_000 } = opts;
@@ -209,7 +232,12 @@ export function buildCodexContext(
     const shown = (type?.fields ?? []).flatMap((f) => {
       if (f.key === hidden || fieldAi(f) === 'hidden') return [];
       if (opts.excludePlanned && PLANNED_FIELDS.has(f.key)) return [];
-      const v = formatValue(f.kind, values[f.key], input, names);
+      const raw = values[f.key];
+      const value =
+        opts.keepNarrativeRef && NARRATIVE_REF_FIELDS.has(f.key) && Array.isArray(raw)
+          ? raw.filter((item) => opts.keepNarrativeRef!(String(item)))
+          : raw;
+      const v = formatValue(f.kind, value, input, names);
       if (v === null) return [];
       const rank = relevance.get(fieldRef(e.key, f.key));
       return [{ f, v, rank, text: `${f.label}: ${v}` }];

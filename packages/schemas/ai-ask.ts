@@ -10,7 +10,7 @@ export const askInput = z.object({
       order: z.string().min(1).nullable(),
     })
     .default({ storyTime: null, workKey: null, order: null }),
-  /** Lets this question see the writer's planned outcomes (Fate, True meaning, Payoff...). */
+  /** Lets this question see the writer's planned outcomes (Fate, Arc summary, Payoff...). */
   includePlanned: z.boolean().default(false),
 });
 

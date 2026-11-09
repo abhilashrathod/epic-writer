@@ -14,7 +14,7 @@ import {
   TYPE_CATALOGUE,
   type ProjectContext,
 } from '@epic/core';
-import { chunks, col, jobs, projectSettings, readHeads, users } from '@epic/db';
+import { chunks, col, jobs, projectSettings, readHeadByKey, readHeads, users } from '@epic/db';
 import { createTestDb } from '@epic/db/testing';
 import { handlers } from '../handlers';
 import { tick } from '../worker';
@@ -53,6 +53,8 @@ let drop: () => Promise<void>;
 let ctx: ProjectContext;
 let episode: string;
 let arjuna: string;
+let workKey: string;
+let seasonKey: string;
 
 beforeAll(async () => ({ db, drop } = await createTestDb()));
 afterAll(() => drop());
@@ -78,9 +80,10 @@ beforeEach(async () => {
     await applyTypeTemplate(db, ctx, t.id);
   }
   ctx = await openProject(db, p._id, user._id);
-  const workKey = await createWork(db, ctx, { name: 'Series', medium: 'series' });
+  workKey = await createWork(db, ctx, { name: 'Series', medium: 'series' });
   const season = await createDocument(db, ctx, { workKey, parentKey: null });
-  episode = await createDocument(db, ctx, { workKey, parentKey: season });
+  seasonKey = season;
+  episode = await createDocument(db, ctx, { workKey, parentKey: season, title: 'Early Oath' });
   const character = (await readHeads(db, 'entityTypes', ctx.scope)).find(
     (t) => t.name === 'Character',
   )!.key;
@@ -207,6 +210,29 @@ describe('AI field access', () => {
     const usage = await col(db, 'aiUsage').find({ jobId: job._id, pass: 'mentions' }).toArray();
     expect(usage).toHaveLength(1);
     expect(spy.models).toContain('my-cheap-one');
+  }, 30_000);
+
+  it('shows only narrative references already reached as of the point', async () => {
+    await createDocument(db, ctx, { workKey, parentKey: seasonKey, title: 'Late Reckoning' });
+    const first = await readHeadByKey(db, 'documents', ctx.scope, episode);
+    const setup = (await readHeads(db, 'entityTypes', ctx.scope)).find(
+      (t) => t.name === 'Setup / Payoff',
+    )!.key;
+    await createEntity(db, ctx, {
+      typeKey: setup,
+      name: 'Bow Promise',
+      fields: { paidOffAt: ['Early Oath', 'Late Reckoning', 'somewhere vague'] },
+    });
+    const asOf = { storyTime: null, workKey, order: `${first!.orderPath}.9999` };
+    const ask = (over = {}) => run('ask', { question: 'What of Bow Promise?', asOf, ...over });
+
+    await ask();
+    expect(allOutput()).toContain('Paid off at: Early Oath');
+    expect(allOutput()).not.toMatch(/Late Reckoning|somewhere vague/);
+
+    spy.sent.length = 0;
+    await ask({ includePlanned: true });
+    expect(allOutput()).toContain('Paid off at: Early Oath, Late Reckoning, somewhere vague');
   }, 30_000);
 
   it('gives relevant long read fields in full and only names the others', async () => {

@@ -6,6 +6,8 @@ import {
   listEntityTypes,
   listLinkTypes,
   mentions,
+  narrativePoints,
+  narrativeRefFilter,
   PLANNED_FIELDS,
   worldSnapshot,
 } from '@epic/core';
@@ -55,11 +57,19 @@ export function makeAskHandler(mock: MockResponder = mockAsk): JobHandler {
       undefined,
       includePlanned ? undefined : PLANNED_FIELDS,
     );
+    const reached =
+      !includePlanned && asOf.workKey && asOf.order !== null
+        ? narrativeRefFilter(await narrativePoints(db, ctx, asOf.workKey), asOf)
+        : null;
     const cards = buildCodexContext(
       { ...world, types, linkTypes, calendar, units: ctx.project.units },
       asOf,
       question,
-      { relevantFields: relevant.fields, excludePlanned: !includePlanned },
+      {
+        relevantFields: relevant.fields,
+        excludePlanned: !includePlanned,
+        ...(reached ? { keepNarrativeRef: reached } : {}),
+      },
     );
     if (cards.length === 0) {
       const empty: AskResultDto = {

@@ -21,6 +21,7 @@ export * from './storylines';
 export * from './ai';
 export * from './codex-context';
 export * from './chunks';
+export * from './narrative-points';
 export * from './identity';
 export * from './proposals';
 export * from './continuity-rules';
