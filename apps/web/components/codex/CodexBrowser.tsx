@@ -5,13 +5,12 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { lifeAt } from '@epic/core/asof';
 import type { EntityDto } from '@epic/schemas/api';
-import { Button, Icon, TYPE_TEXT, focusRing } from '@epic/ui';
+import { Icon, TYPE_TEXT, focusRing } from '@epic/ui';
 import { useEntities, useTypes } from '../../lib/use-types';
 import { useWorkspace } from '../Workspace';
 import { primaryImage } from './EntryImages';
 import { EntryCard } from './EntryCard';
 import { EntryDetail } from './EntryDetail';
-import { EntryForm } from './EntryForm';
 
 /**
  * The codex browser (CX-6): types grouped in a sidebar, a card grid sorted by prominence (events by
@@ -26,7 +25,6 @@ export function CodexBrowser() {
   const pathname = usePathname();
   const [query, setQuery] = useState('');
   const [showScrapped, setShowScrapped] = useState(false);
-  const [editing, setEditing] = useState<'new' | 'edit' | null>(null);
 
   const typeFilter = params.get('type');
   const openKey = params.get('e');
@@ -51,6 +49,9 @@ export function CodexBrowser() {
           e.aliases.some((a) => a.toLowerCase().includes(q))),
     );
   }, [all, query, showScrapped, typeFilter]);
+
+  const codex = `/projects/${projectId}/codex`;
+  const primaryLink = `rounded-full bg-primary px-5 py-2 text-sm font-medium text-on-primary ${focusRing}`;
 
   if (meta.isPending || entities.isPending)
     return <p className="p-8 text-muted">Opening the codex…</p>;
@@ -78,11 +79,14 @@ export function CodexBrowser() {
       <div className="mx-auto flex max-w-md flex-col gap-3 px-6 py-16">
         <h1 className="text-2xl font-semibold tracking-tight">Codex</h1>
         <p className="text-muted">Entries need a type first: a character, a place, a weapon.</p>
+        <Link href={`${codex}/templates`} className={`self-start ${primaryLink}`}>
+          Create from template
+        </Link>
         <Link
-          href={`/projects/${projectId}/codex/types`}
-          className={`self-start rounded-full bg-primary px-5 py-2 text-sm font-medium text-on-primary ${focusRing}`}
+          href={`${codex}/types`}
+          className={`self-start text-sm text-muted hover:text-ink ${focusRing}`}
         >
-          Create an entry type
+          Create an entry type yourself
         </Link>
       </div>
     );
@@ -170,9 +174,18 @@ export function CodexBrowser() {
             />{' '}
             Show scrapped
           </label>
-          <Button variant="primary" onClick={() => setEditing('new')}>
+          <Link
+            href={`${codex}/templates`}
+            className={`rounded-md px-3 py-2 text-sm text-muted hover:text-ink ${focusRing}`}
+          >
+            Create from template
+          </Link>
+          <Link
+            href={`${codex}/new${typeFilter ? `?type=${typeFilter}` : ''}`}
+            className={primaryLink}
+          >
             New entry
-          </Button>
+          </Link>
         </div>
         {visible.length === 0 ? (
           <p className="text-muted">
@@ -185,10 +198,7 @@ export function CodexBrowser() {
             {visible.map((e) => (
               <li key={e.key}>
                 <button
-                  onClick={() => {
-                    setEditing(null);
-                    go({ e: e.key });
-                  }}
+                  onClick={() => go({ e: e.key })}
                   className={`block h-full w-full rounded-xl text-left ${focusRing}`}
                   aria-pressed={openKey === e.key}
                 >
@@ -206,36 +216,19 @@ export function CodexBrowser() {
         )}
       </section>
 
-      {(editing || open) && (
+      {open && (
         <aside
-          aria-label={editing === 'new' ? 'New entry' : (open?.name ?? 'Entry')}
+          aria-label={open.name}
           className="w-full shrink-0 rounded-xl bg-panel p-4 xl:sticky xl:top-6 xl:w-96"
         >
-          {editing ? (
-            <EntryForm
-              key={editing === 'new' ? 'new' : open?.key}
-              projectId={projectId}
-              meta={meta.data!}
-              entries={all}
-              existing={editing === 'edit' ? open : null}
-              initialTypeKey={typeFilter ?? undefined}
-              onDone={(key) => {
-                setEditing(null);
-                go({ e: key });
-              }}
-            />
-          ) : (
-            open && (
-              <EntryDetail
-                projectId={projectId}
-                entry={open}
-                meta={meta.data!}
-                entries={all}
-                onOpen={(k) => go({ e: k })}
-                onEdit={() => setEditing('edit')}
-              />
-            )
-          )}
+          <EntryDetail
+            projectId={projectId}
+            entry={open}
+            meta={meta.data!}
+            entries={all}
+            onOpen={(k) => go({ e: k })}
+            onEdit={() => router.push(`${codex}/${open.key}/edit`)}
+          />
         </aside>
       )}
     </div>

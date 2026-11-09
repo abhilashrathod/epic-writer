@@ -209,6 +209,11 @@ Full detail is in `docs/data-model.md`. What you must know without opening it:
 - Every catalogue field carries `ai` (`extract`, `read` or `hidden`). Author intent and planning are `read`; private notes are `hidden`; what a scene can state is `extract`.
 - The catalogue is public seed data: names and descriptions use generic or public-domain examples only. `docs/codex-types.md` is the design reference it was built from.
 
+## Entry wizard
+
+- New entry, edit and templates are full pages under `/codex` (`new`, `[entryKey]/edit`, `templates`). The script editor's Add to codex panel keeps `EntryForm` narrow so writing isn't left.
+- `fieldSteps` in `apps/web/lib/entry-steps.ts` derives wizard steps from field keys and kinds. The schema has no field sections; don't add type-name checks there.
+
 ## Import, export and backups
 
 - Fountain import (IO-2): `core.importFountain` creates the script with `createDocument`, takes its title from the Fountain title page (else the file name), normalises line endings and assigns scene keys before the first save. The browser reads the file and posts it as JSON (`@epic/schemas/io`); there is no upload storage.

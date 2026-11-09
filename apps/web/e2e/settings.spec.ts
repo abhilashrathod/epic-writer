@@ -135,6 +135,7 @@ test('overview, visual references with a mood board, inspirations, entry images 
   await form.getByLabel('Upload images: choose files').setInputFiles([png('c.png'), png('d.png')]);
   await expect(form.getByLabel('Image 2 caption')).toBeVisible();
   await form.getByLabel('Image 2 caption').fill('At dawn');
+  await form.getByRole('button', { name: 'Next: Details' }).click();
   await form.getByLabel('Upload Emblem: choose files').setInputFiles(png('e.png'));
   await expect(form.getByRole('img', { name: 'Emblem' })).toBeVisible();
   await form.getByRole('button', { name: 'Save entry' }).click();

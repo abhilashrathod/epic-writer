@@ -17,13 +17,14 @@ test('codex: create with live preview, browse, search, scrap, merge and delete (
   });
 
   await page.goto(`/projects/${project.id}/codex`);
-  await page.getByRole('button', { name: 'New entry' }).click();
+  await page.getByRole('link', { name: 'New entry' }).click();
   const form = page.getByRole('form', { name: 'New entry' });
   await form.getByLabel('Type', { exact: true }).selectOption({ label: 'Character' });
   await form.getByLabel('Name', { exact: true }).fill('Bhishma');
   await expect(form.getByRole('group', { name: 'Card preview' })).toContainText('Bhishma'); // live preview
   await form.getByLabel('Also known as').fill('Devavrata, Grandsire');
   await form.getByLabel('Prominence').selectOption('main');
+  await form.getByRole('button', { name: 'Next: Details' }).click();
   await form.getByLabel('Story role', { exact: true }).selectOption('mentor');
   await form.getByLabel('Where they are', { exact: true }).selectOption({ label: 'River Bank' });
   await form.getByLabel('Born: precision').selectOption('year');
@@ -94,7 +95,7 @@ test('shows field errors from the type', async ({ page, request }) => {
     },
   });
   await page.goto(`/projects/${project.id}/codex`);
-  await page.getByRole('button', { name: 'New entry' }).click();
+  await page.getByRole('link', { name: 'New entry' }).click();
   const form = page.getByRole('form', { name: 'New entry' });
   await form.getByLabel('Name', { exact: true }).fill('The Oath');
   await form.getByRole('button', { name: 'Save to codex' }).click();

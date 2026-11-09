@@ -20,6 +20,12 @@ export const ICONS = {
   gem: 'M6 4h12l3 5-9 11L3 9Z M3 9h18',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Z M4 19V5',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M12 7v5l3 2',
+  chat: 'M4 5h16v11H9l-5 4Z',
+  upload: 'M12 16V4 M7 9l5-5 5 5 M4 20h16',
+  sliders: 'M4 7h10 M18 7h2 M4 17h2 M10 17h10 M16 5v4 M8 15v4',
+  grid: 'M4 4h7v7H4Z M13 4h7v7h-7Z M4 13h7v7H4Z M13 13h7v7h-7Z',
+  threads: 'M3 7c4 0 5 10 9 10s5-10 9-10 M3 17c4 0 5-10 9-10s5 10 9 10',
 } as const;
 
 export type IconName = keyof typeof ICONS;
