@@ -99,3 +99,31 @@ test('focus mode hides the sidebar, keeps the text, and Esc exits (ED-11)', asyn
   await expect(page.getByRole('complementary', { name: 'Works' })).toBeVisible();
   await expect(line(page, 'sceneHeading')).toHaveText('INT. HALL - DAY');
 });
+
+test('the help button lists editor shortcuts; Esc closes it without leaving focus', async ({
+  page,
+}) => {
+  const help = page.getByRole('dialog', { name: 'Editor shortcuts' });
+  await page.getByRole('button', { name: 'Editor shortcuts and help' }).click();
+  await expect(help).toBeVisible();
+  await expect(help.getByText('Add a parenthetical')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(help).toBeHidden();
+
+  await page.getByRole('button', { name: 'Focus' }).click();
+  await page.getByRole('button', { name: 'Editor shortcuts and help' }).click();
+  await expect(help).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(help).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Exit focus (Esc)' })).toBeVisible();
+});
+
+test('the sidebar stays in view while a long script scrolls', async ({ page }) => {
+  await page.keyboard.insertText(Array.from({ length: 300 }, (_, i) => `Line ${i}`).join('\n\n'));
+  // Over the script, not the sidebar, which scrolls on its own when it is taller than the window.
+  await page.mouse.move(900, 300);
+  await page.mouse.wheel(0, 20000);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000);
+  const works = page.getByRole('complementary', { name: 'Works' });
+  await expect(works.getByRole('link', { name: 'Codex', exact: true })).toBeInViewport();
+});

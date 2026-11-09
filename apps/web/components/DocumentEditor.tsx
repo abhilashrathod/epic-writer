@@ -15,6 +15,7 @@ import { useEntities, useTypes } from '../lib/use-types';
 import { EntryForm } from './codex/EntryForm';
 import { ExtractPanel } from './ExtractPanel';
 import { ContinuityPanel } from './ContinuityPanel';
+import { EditorHelp } from './EditorHelp';
 import { HistoryPanel } from './HistoryPanel';
 import { MentionCard } from './MentionCard';
 import { ScriptEditor, type EditorHandle, type TextSelection } from './ScriptEditor';
@@ -139,7 +140,8 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
   useEffect(() => {
     if (!focus) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      // A popover or menu that handled Esc itself marks it, so closing it doesn't exit focus too.
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       setFocusPanel((p) => {
         if (!p) setFocus(false);
         return null;
@@ -259,6 +261,7 @@ function LoadedDocument({ data, sceneKey }: { data: DocumentTextDto; sceneKey?: 
               </Menu.Portal>
             </Menu.Root>
           )}
+          <EditorHelp format={document.format} />
           <Button onClick={() => setFocus(!focus)}>{focus ? 'Exit focus (Esc)' : 'Focus'}</Button>
         </div>
       </header>
