@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canonicalNarrativeRef,
+  currentNarrativeOrder,
   describeNarrativeRef,
   labelOnlyRef,
   narrativeItems,
@@ -110,12 +111,29 @@ describe('resolveNarrativeRef', () => {
     expect(target('E2', 'tv')).toBe('ambiguous');
   });
 
-  it.each(['the finale', 'S09E09', '', 'S1', 'First Season', '0001'])(
-    'leaves %j unresolved, since containers are not targets',
-    (text) => {
-      expect(target(text, 'tv')).toBe('unresolved');
-    },
-  );
+  it.each(['the finale', 'S09E09', ''])('leaves %j unresolved', (text) => {
+    expect(target(text, 'tv')).toBe('unresolved');
+  });
+
+  it.each([
+    ['S1', 's1'],
+    ['Season 1', 's1'],
+    ['First Season', 's1'],
+    ['0001', 's1'],
+    ['Season 2', 's2'],
+  ])('takes %s as a whole container', (text, documentKey) => {
+    expect(target(text, 'tv')).toMatchObject({ documentKey, sceneKey: null });
+  });
+
+  it('reads a container in a level-named work', () => {
+    expect(target('Book 1')).toMatchObject({ workKey: 'nv', documentKey: 'b1' });
+  });
+
+  it('counts a container at its last scene, so it never reveals early', () => {
+    expect(target('S1', 'tv')).toMatchObject({ order: '0001.0002.0002' });
+    // Its last episode has no scenes yet.
+    expect(target('Season 2', 'tv')).toMatchObject({ order: '0002.0002' });
+  });
 });
 
 describe('narrativeRefReached', () => {
@@ -137,10 +155,30 @@ describe('narrativeRefReached', () => {
     expect(narrativeRefReached(labelOnlyRef('x'), at(null))).toBe(true);
     expect(narrativeRefReached(place, at('0001.0001', null))).toBe(true);
   });
+});
 
-  it('follows an episode that has moved since the reference was saved', () => {
-    const stale = { ...place, order: '0001.0009' };
-    expect(narrativeRefReached(stale, at('0001.0002'), index)).toBe(true);
+describe('currentNarrativeOrder', () => {
+  const ref = (documentKey: string, sceneKey: string | null, order = '0009.0009.0003') => ({
+    workKey: 'tv',
+    documentKey,
+    sceneKey,
+    order,
+  });
+
+  it('reads the order from the keys', () => {
+    expect(currentNarrativeOrder(ref('e2', 'c'), index)).toBe('0001.0002.0002');
+    expect(currentNarrativeOrder(ref('e2', null), index)).toBe('0001.0002');
+    expect(currentNarrativeOrder(ref('s1', null), index)).toBe('0001.0002.0002');
+  });
+
+  it('keeps a gone scene under its episode, and a gone episode as it was', () => {
+    expect(currentNarrativeOrder(ref('e2', 'gone'), index)).toBe('0001.0002.0003');
+    expect(currentNarrativeOrder(ref('gone', null), index)).toBe('0009.0009.0003');
+  });
+
+  it('puts an empty container past anything that could be inside it', () => {
+    const empty = { ...index, documents: [doc('x', 'tv', 'season', 3, '0003', '', 'container')] };
+    expect(currentNarrativeOrder(ref('x', null), empty)).toBe('0003.9999');
   });
 });
 
@@ -156,10 +194,15 @@ describe('canonicalNarrativeRef', () => {
     });
   });
 
-  it('refuses gone places, containers and scenes of another episode', () => {
+  it('accepts a whole container, at its end, but not a scene of one', () => {
+    const r = { workKey: 'tv', documentKey: 's1', sceneKey: null, order: '1' };
+    expect(canonicalNarrativeRef(r, index)?.order).toBe('0001.0002.0002');
+    expect(canonicalNarrativeRef({ ...r, sceneKey: 'a' }, index)).toBeNull();
+  });
+
+  it('refuses gone places and scenes of another episode', () => {
     const r = { workKey: 'tv', documentKey: 'gone', sceneKey: null, order: '1' };
     expect(canonicalNarrativeRef(r, index)).toBeNull();
-    expect(canonicalNarrativeRef({ ...r, documentKey: 's1' }, index)).toBeNull();
     expect(canonicalNarrativeRef({ ...r, documentKey: 'e1', sceneKey: 'b' }, index)).toBeNull();
   });
 

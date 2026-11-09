@@ -69,12 +69,28 @@ function targetText(index: NarrativeIndex, d: Doc, s: Scene | null): string {
   return `${work ? `${work.name}: ` : ''}${path.join(' › ')}`;
 }
 
+/**
+ * Where a reference to a whole document counts. A container counts at its last scene, so it never
+ * reveals early; with nothing written yet, at its last episode or past anything inside it.
+ */
+function endOf(index: NarrativeIndex, d: Doc): string {
+  if (d.kind === 'text') return d.orderPath;
+  const last = index.documents
+    .filter(
+      (x) =>
+        x.workKey === d.workKey && x.kind === 'text' && x.orderPath.startsWith(`${d.orderPath}.`),
+    )
+    .sort((a, b) => b.orderPath.localeCompare(a.orderPath))[0];
+  if (!last) return `${d.orderPath}.9999`;
+  return scenesOf(index, last.key).at(-1)?.order ?? last.orderPath;
+}
+
 const toTarget = (index: NarrativeIndex, d: Doc, s: Scene | null): NarrativeTarget => ({
   ref: {
     workKey: d.workKey,
     documentKey: d.key,
     sceneKey: s?.sceneKey ?? null,
-    order: s?.order ?? d.orderPath,
+    order: s?.order ?? endOf(index, d),
   },
   target: targetText(index, d, s),
 });
@@ -107,8 +123,8 @@ function byShorthand(index: NarrativeIndex, work: Work, q: string): NarrativeTar
       sceneNumber = n;
     } else return [];
   }
+  if (sceneNumber === null) return (scope ?? []).map((d) => toTarget(index, d, null));
   const leaves = (scope ?? docs).filter((d) => d.kind === 'text');
-  if (sceneNumber === null) return leaves.map((d) => toTarget(index, d, null));
   return leaves.flatMap((d) => {
     const s = scenesOf(index, d.key)[sceneNumber! - 1];
     return s ? [toTarget(index, d, s)] : [];
@@ -118,8 +134,7 @@ function byShorthand(index: NarrativeIndex, work: Work, q: string): NarrativeTar
 /**
  * Finds the place a piece of text names: an episode or chapter title, a scene heading, an order
  * path, or shorthand in the work's level names. A title, heading or path wins over shorthand. Text
- * that fits more than one place comes back ambiguous, for the writer to choose; only containers
- * are never a target, since a season has no single point in the story.
+ * that fits more than one place comes back ambiguous, for the writer to choose.
  */
 export function resolveNarrativeRef(
   text: string,
@@ -129,7 +144,7 @@ export function resolveNarrativeRef(
   const q = norm(text);
   if (!q) return { status: 'unresolved' };
   const inWork = (k: string) => !workKey || k === workKey;
-  const docs = index.documents.filter((d) => d.kind === 'text' && inWork(d.workKey));
+  const docs = index.documents.filter((d) => inWork(d.workKey));
   const docOf = new Map(docs.map((d) => [d.key, d]));
   const named = [
     ...docs
@@ -168,6 +183,18 @@ export const labelOnlyRef = (label: string): NarrativeRefValue => ({
 export const needsSceneLink = (r: NarrativeRefValue) => r.documentKey === null;
 
 /**
+ * The order a reference's keys put it at now. A scene that has since gone keeps its number under
+ * its episode's current path; a reference whose episode has gone keeps what it had.
+ */
+export function currentNarrativeOrder(r: NarrativeRefValue, index: NarrativeIndex): string | null {
+  const d = index.documents.find((x) => x.key === r.documentKey);
+  if (!d) return r.order;
+  if (!r.sceneKey) return endOf(index, d);
+  const s = index.scenes.find((x) => x.sceneKey === r.sceneKey && x.documentKey === d.key);
+  return s?.order ?? `${d.orderPath}.${r.order?.split('.').pop()}`;
+}
+
+/**
  * The reference with its work and order taken from its keys, or null when its episode or scene no
  * longer exists. Label-only items pass through.
  */
@@ -176,35 +203,20 @@ export function canonicalNarrativeRef(
   index: NarrativeIndex,
 ): NarrativeRefValue | null {
   if (needsSceneLink(r)) return r;
-  const d = index.documents.find((x) => x.key === r.documentKey && x.kind === 'text');
+  const d = index.documents.find((x) => x.key === r.documentKey);
   if (!d) return null;
-  const s = r.sceneKey ? scenesOf(index, d.key).find((x) => x.sceneKey === r.sceneKey) : null;
-  if (r.sceneKey && !s) return null;
-  return { ...r, workKey: d.workKey, order: s?.order ?? d.orderPath };
-}
-
-/** Order changes when scenes or episodes move, so the keys are preferred over the stored order. */
-function currentOrder(r: NarrativeRefValue, index?: NarrativeIndex): string | null {
-  if (!index) return r.order;
-  return (
-    index.scenes.find((s) => s.sceneKey === r.sceneKey)?.order ??
-    index.documents.find((d) => d.key === r.documentKey)?.orderPath ??
-    r.order
-  );
+  if (r.sceneKey && !index.scenes.some((x) => x.sceneKey === r.sceneKey && x.documentKey === d.key))
+    return null;
+  return { ...r, workKey: d.workKey, order: currentNarrativeOrder(r, index) };
 }
 
 /**
  * Whether a reference may be shown as of a point. A label, or a place in another work, can't be
  * compared with the point and could be a spoiler, so it stays out until the end of the story.
  */
-export function narrativeRefReached(
-  r: NarrativeRefValue,
-  asOf: AsOf,
-  index?: NarrativeIndex,
-): boolean {
+export function narrativeRefReached(r: NarrativeRefValue, asOf: AsOf): boolean {
   if (!asOf.workKey || asOf.order === null) return true;
-  const order = currentOrder(r, index);
-  return r.workKey === asOf.workKey && order !== null && order <= asOf.order;
+  return r.workKey === asOf.workKey && r.order !== null && r.order <= asOf.order;
 }
 
 /** A reference in words, with its label after the place when it has both. */

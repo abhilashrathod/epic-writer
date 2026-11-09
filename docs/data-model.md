@@ -54,7 +54,7 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 
 **entityTypes**: `name, pluralName, description, icon, color, group, parentTypeKey, traits[], fields[{ key, label, kind, options, required, timeVarying, refTypeKeys[], ai }], order`.
 
-- Field kinds: `text, richtext, number, quantity, date (story time), enum, multiEnum, boolean, entityRef, entityRefList, image, list, composition, narrativeRef, narrativeRefList`. A `narrativeRef` value is `{ workKey, documentKey, sceneKey, order, label? }` (`sceneKey` null for a whole episode or chapter). Before it's linked, an item keeps only `label`, with the other four null, and its card shows "needs a scene link".
+- Field kinds: `text, richtext, number, quantity, date (story time), enum, multiEnum, boolean, entityRef, entityRefList, image, list, composition, narrativeRef, narrativeRefList`. A `narrativeRef` value is `{ workKey, documentKey, sceneKey, order, label? }` (`sceneKey` null for a whole document). A reference to a container (season, book, part) stores its last scene's order, so it never reveals early. Before it's linked, an item keeps only `label`, with the other four null, and its card shows "needs a scene link".
 - `ai`: `'extract'` (extraction may fill it), `'read'` (shown to the AI, never written by it; the default for custom fields) or `'hidden'` (never in any prompt or chunk). Rows saved before `ai` existed resolve through `fieldAi`.
 - Traits: `born, locatable, holdable, hasStrength, ranked, position, institution, ruleSystem, ability, event, secret, setup, account, transport, resource, term, geo`.
 

@@ -1,4 +1,4 @@
-import type { Db, ObjectId } from 'mongodb';
+import type { ClientSession, Db, ObjectId } from 'mongodb';
 import { v7 as uuidv7 } from 'uuid';
 import {
   documentVersions,
@@ -16,6 +16,12 @@ import {
 import { commit, commitInSession, versionBody, type Change } from './commit';
 import { emptyOverview, emptyVisual } from './defaults';
 import { Invalid, NotFound } from './errors';
+import {
+  applyTreeChanges,
+  loadNarrativeIndex,
+  narrativeOrderChanges,
+  syncSceneOrders,
+} from './narrative-index';
 import {
   DEFAULT_LEVELS,
   levelNamesSchema,
@@ -159,6 +165,37 @@ function renumber(ordered: DocumentDoc[], parentPath: string, all: DocumentDoc[]
 }
 
 /**
+ * Commits a change to the document tree together with every stored narrative order it shifts, then
+ * moves the scene rows to match. A new last episode shifts where its container ends, so additions
+ * come through here too.
+ */
+async function commitTree(
+  db: Db,
+  session: ClientSession,
+  ctx: ProjectContext,
+  message: string,
+  changes: Change[],
+): Promise<void> {
+  const index = applyTreeChanges(await loadNarrativeIndex(db, ctx, session), changes);
+  await commitInSession(db, session, {
+    ...ctx.scope,
+    message,
+    author: author(ctx),
+    changes: [...changes, ...(await narrativeOrderChanges(db, ctx, index, session))],
+  });
+  await syncSceneOrders(db, session, ctx);
+}
+
+async function inTransaction(db: Db, run: (session: ClientSession) => Promise<void>) {
+  const session = db.client.startSession();
+  try {
+    await session.withTransaction(() => run(session));
+  } finally {
+    await session.endSession();
+  }
+}
+
+/**
  * Adds a season, episode, chapter... under `parentKey` (or at the top of the work). `contentType`
  * overrides the work's default, e.g. notes in a prose work.
  */
@@ -205,12 +242,9 @@ export async function createDocument(
   const session = db.client.startSession();
   try {
     await session.withTransaction(async () => {
-      await commitInSession(db, session, {
-        ...ctx.scope,
-        message: `Add ${title}`,
-        author: author(ctx),
-        changes: [{ op: 'create', collection: 'documents', key, data }],
-      });
+      await commitTree(db, session, ctx, `Add ${title}`, [
+        { op: 'create', collection: 'documents', key, data },
+      ]);
       if (kind === 'text') {
         await documentVersions.createWorking(db, { ...ctx.scope, documentKey: key }, { session });
       }
@@ -359,12 +393,15 @@ export async function moveDocument(
   const parentPath = doc.parentKey
     ? (all.find((d) => d.key === doc.parentKey)?.orderPath ?? '')
     : '';
-  await commit(db, {
-    ...ctx.scope,
-    message: `Move "${doc.title}" ${direction}`,
-    author: author(ctx),
-    changes: renumber(siblings, parentPath, all),
-  });
+  await inTransaction(db, (session) =>
+    commitTree(
+      db,
+      session,
+      ctx,
+      `Move "${doc.title}" ${direction}`,
+      renumber(siblings, parentPath, all),
+    ),
+  );
 }
 
 /** Deletes a document and everything under it, then closes the gap in numbering. */
@@ -381,15 +418,12 @@ export async function deleteDocument(db: Db, ctx: ProjectContext, key: string): 
   const parentPath = doc.parentKey
     ? (all.find((d) => d.key === doc.parentKey)?.orderPath ?? '')
     : '';
-  await commit(db, {
-    ...ctx.scope,
-    message: `Delete "${doc.title}"`,
-    author: author(ctx),
-    changes: [
+  await inTransaction(db, (session) =>
+    commitTree(db, session, ctx, `Delete "${doc.title}"`, [
       ...[...doomed].map((k): Change => ({ op: 'delete', collection: 'documents', key: k })),
       ...renumber(remaining, parentPath, all),
-    ],
-  });
+    ]),
+  );
 }
 
 /** The working text of a script or chapter, with its version for optimistic saves. */

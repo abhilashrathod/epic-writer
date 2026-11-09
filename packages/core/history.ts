@@ -9,6 +9,7 @@ import {
 } from '@epic/db';
 import { commitInSession, versionBody, type Change, type CommitResult } from './commit';
 import { Conflict, Invalid, NotFound } from './errors';
+import { refreshNarrativeOrders, syncSceneOrders } from './narrative-index';
 import type { ProjectContext } from './works';
 
 export interface CommitSummary {
@@ -132,12 +133,18 @@ export async function undoCommit(db: Db, ctx: ProjectContext, seq: number): Prom
           data.firstAppearances = (row as unknown as Record<string, unknown>).firstAppearances;
         return { op: row.deleted ? 'restore' : 'update', collection, key: row.key, data };
       });
-      return await commitInSession(db, session, {
+      const undone = await commitInSession(db, session, {
         ...ctx.scope,
         message: `Undo "${c.message}"`,
         author: { kind: 'user', userId: ctx.userId },
         changes,
       });
+      // Scene rows aren't versioned and first appearances are kept above, so they follow here.
+      if (rows.some((t) => t.collection === 'documents')) {
+        await syncSceneOrders(db, session, ctx);
+        await refreshNarrativeOrders(db, session, ctx);
+      }
+      return undone;
     });
   } catch (e) {
     if (e instanceof MongoServerError && e.code === 11000)

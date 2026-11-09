@@ -35,7 +35,7 @@ export function NarrativeRefInput(props: {
   const workKey = chosenWork || index.works[0]?.key || '';
   const work = index.works.find((w) => w.key === workKey);
   const docs = index.documents
-    .filter((d) => d.workKey === workKey && d.kind === 'text')
+    .filter((d) => d.workKey === workKey)
     .sort((a, b) => a.orderPath.localeCompare(b.orderPath));
   const doc = docs.find((d) => d.key === documentKey);
   const scenes = index.scenes
@@ -115,7 +115,7 @@ export function NarrativeRefInput(props: {
       <input
         aria-label={`${f.label}: type a place`}
         className={box}
-        placeholder="Type S01E02, Book 1 ch 4 or a title"
+        placeholder="Type S01E02, S1, Book 1 ch 4 or a title"
         value={typed}
         onChange={(e) => setTyped(e.target.value)}
       />
@@ -147,7 +147,7 @@ export function NarrativeRefInput(props: {
             setSceneKey('');
           }}
         >
-          <option value="">Choose an episode or chapter…</option>
+          <option value="">Choose a season, episode or chapter…</option>
           {docs.map((d) => (
             <option key={d.key} value={d.key}>
               {describeNarrativeRef(

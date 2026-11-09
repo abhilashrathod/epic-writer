@@ -70,7 +70,7 @@ export interface ContextLinkType {
 }
 
 export interface CodexContextInput {
-  /** Names places in the story and keeps their order current. */
+  /** Names places in the story. */
   narrative?: NarrativeIndex;
   entities: ContextEntity[];
   links: ContextLink[];
@@ -243,9 +243,7 @@ export function buildCodexContext(
       const raw = values[f.key];
       const refs =
         isNarrativeRefKind(f.kind) || (f.kind === 'list' && NARRATIVE_REF_FIELDS.has(f.key))
-          ? narrativeItems(raw).filter(
-              (r) => !opts.excludePlanned || narrativeRefReached(r, asOf, input.narrative),
-            )
+          ? narrativeItems(raw).filter((r) => !opts.excludePlanned || narrativeRefReached(r, asOf))
           : null;
       const v = refs
         ? refs.map((r) => describeNarrativeRef(r, input.narrative)).join(', ') || null

@@ -2,19 +2,33 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ObjectId, type Db } from 'mongodb';
 import {
+  addFact,
   applyTypeTemplate,
   createDocument,
   createEntity,
+  createLink,
   createProject,
   createWork,
   getProposal,
+  moveDocument,
   openProject,
+  resolveFields,
   saveAiKey,
   saveWorkingText,
+  timedStatus,
   TYPE_CATALOGUE,
   type ProjectContext,
 } from '@epic/core';
-import { chunks, col, jobs, projectSettings, readHeadByKey, readHeads, users } from '@epic/db';
+import {
+  chunks,
+  col,
+  jobs,
+  projectSettings,
+  readHeadByKey,
+  readHeads,
+  scenes,
+  users,
+} from '@epic/db';
 import { createTestDb } from '@epic/db/testing';
 import { handlers } from '../handlers';
 import { tick } from '../worker';
@@ -260,6 +274,97 @@ describe('AI field access', () => {
     });
     expect(allOutput()).toMatch(/Late Reckoning/);
     expect(allOutput()).toContain('somewhere vague');
+  }, 30_000);
+
+  it('keeps every stored order right when an episode moves, in one commit', async () => {
+    const two = await createDocument(db, ctx, {
+      workKey,
+      parentKey: seasonKey,
+      title: 'Second Wind',
+    });
+    const three = await createDocument(db, ctx, {
+      workKey,
+      parentKey: seasonKey,
+      title: 'Third Gate',
+    });
+    const all = await readHeads(db, 'entityTypes', ctx.scope);
+    const typeNamed = (name: string) => all.find((t) => t.name === name)!;
+    const warden = await createEntity(db, ctx, {
+      typeKey: typeNamed('Character').key,
+      name: 'Gate Warden',
+    });
+    await saveWorkingText(db, ctx, {
+      documentKey: three,
+      text: `INT. GATE - DAY [[@s:gate]]\n\n[[@e:${warden}|Gate Warden]] waits.`,
+      baseVersion: 0,
+    });
+    const docHead = (key: string) => readHeadByKey(db, 'documents', ctx.scope, key);
+    const ref = {
+      workKey,
+      documentKey: three,
+      sceneKey: 'gate',
+      order: `${(await docHead(three))!.orderPath}.0001`,
+    };
+    const promise = await createEntity(db, ctx, {
+      typeKey: typeNamed('Setup / Payoff').key,
+      name: 'Bow Promise',
+      fields: { paidOffAt: [ref] },
+    });
+    const status = typeNamed('Character').fields.find((f) => f.key === 'status')!;
+    const factKey = await addFact(db, ctx, {
+      entityKey: warden,
+      field: 'status',
+      value: status.options.at(-1),
+      storyTime: { start: 0, end: null, precision: 'unknown' },
+      narrativeRefs: [ref],
+    });
+    const linkKey = await createLink(db, ctx, {
+      typeKey: (await readHeads(db, 'linkTypes', ctx.scope))[0]!.key,
+      fromKey: warden,
+      toKey: arjuna,
+      narrativeRefs: [ref],
+    });
+
+    // Position two: "Second Wind" before the move, "Third Gate" after it.
+    const asOf = { storyTime: null, workKey, order: `${(await docHead(two))!.orderPath}.9999` };
+    const fact = async () => (await readHeadByKey(db, 'facts', ctx.scope, factKey))!;
+    const ask = async () => {
+      spy.sent.length = 0;
+      await run('ask', { question: 'What of Bow Promise and Gate Warden?', asOf });
+      return allOutput();
+    };
+    const statusAsOf = async () =>
+      resolveFields({}, [await fact()], asOf as Parameters<typeof resolveFields>[2]).status;
+
+    expect(timedStatus(await fact(), asOf)).toBe('future');
+    expect(await statusAsOf()).toBeUndefined();
+    expect(await ask()).not.toMatch(/Third Gate|Status:/);
+
+    await moveDocument(db, ctx, three, 'up');
+
+    const moved = (await docHead(three))!;
+    const order = `${moved.orderPath}.0001`;
+    expect(`${moved.orderPath}.9999`).toBe(asOf.order);
+    const head = async (key: string) => (await readHeadByKey(db, 'entities', ctx.scope, key))!;
+    const paid = (await head(promise)).fields.paidOffAt as { order: string }[];
+    const link = (await readHeadByKey(db, 'links', ctx.scope, linkKey))!;
+    expect(paid[0]!.order).toBe(order);
+    expect((await fact()).narrativeRefs[0]!.order).toBe(order);
+    expect(link.narrativeRefs[0]!.order).toBe(order);
+    expect((await head(warden)).firstAppearances[0]!.order).toBe(order);
+    expect((await scenes.listForDocument(db, { ...ctx.scope, documentKey: three }))[0]!.order).toBe(
+      order,
+    );
+    // One commit moved the episode and everything pointing at it.
+    expect(new Set([moved.seq, (await fact()).seq, link.seq, (await head(promise)).seq]).size).toBe(
+      1,
+    );
+
+    expect(timedStatus(await fact(), asOf)).toBe('past');
+    expect(await statusAsOf()).toBe(status.options.at(-1));
+    const output = await ask();
+    expect(output).toMatch(/Paid off at: [^;\n]*Third Gate/);
+    expect(output).toContain('Status:');
   }, 30_000);
 
   it('gives relevant long read fields in full and only names the others', async () => {

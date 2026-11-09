@@ -416,13 +416,20 @@ export const scenes = {
   findByKey: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; sceneKey: string }) =>
     col(db, 'scenes').findOne(p),
   /** A work's scenes (or the whole project's), in narrative order within each work. */
-  list: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; workKey?: string }) =>
+  list: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; workKey?: string },
+    opts: Opts = {},
+  ) =>
     col(db, 'scenes')
-      .find({
-        projectId: p.projectId,
-        branchId: p.branchId,
-        ...(p.workKey && { workKey: p.workKey }),
-      })
+      .find(
+        {
+          projectId: p.projectId,
+          branchId: p.branchId,
+          ...(p.workKey && { workKey: p.workKey }),
+        },
+        opts,
+      )
       .sort({ workKey: 1, order: 1 })
       .toArray(),
   /** Scenes that mention an entry, in narrative order. */
@@ -431,8 +438,29 @@ export const scenes = {
       .find({ projectId: p.projectId, branchId: p.branchId, entityKeys: p.entityKey })
       .sort({ order: 1 })
       .toArray(),
-  listForDocument: (db: Db, p: { projectId: ObjectId; branchId: ObjectId; documentKey: string }) =>
-    col(db, 'scenes').find(p).sort({ order: 1 }).toArray(),
+  listForDocument: (
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId; documentKey: string },
+    opts: Opts = {},
+  ) => col(db, 'scenes').find(p, opts).sort({ order: 1 }).toArray(),
+  /** Gives scenes new narrative positions after their documents moved. */
+  async setOrders(
+    db: Db,
+    p: { projectId: ObjectId; branchId: ObjectId },
+    moved: { sceneKey: string; documentKey: string; order: string }[],
+    opts: Opts = {},
+  ): Promise<void> {
+    if (!moved.length) return;
+    await col(db, 'scenes').bulkWrite(
+      moved.map(({ order, ...row }) => ({
+        updateOne: {
+          filter: { projectId: p.projectId, branchId: p.branchId, ...row },
+          update: { $set: { order, updatedAt: new Date() } },
+        },
+      })),
+      opts,
+    );
+  },
 };
 
 // ---------- assets ----------

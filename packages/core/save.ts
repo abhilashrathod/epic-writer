@@ -12,6 +12,7 @@ import {
 import { classifyLines, extractScenes, findMarkers, textStats } from '@epic/fountain';
 import { markStaleOnSave } from './continuity';
 import { updateFirstAppearances } from './first-appearances';
+import { refreshNarrativeOrders } from './narrative-index';
 import { Conflict, Invalid, NotFound } from './errors';
 import type { ProjectContext } from './works';
 
@@ -86,6 +87,13 @@ export function deriveScenes(
   });
 }
 
+/** Which scene sits where, to tell whether a save moved any. */
+const sceneLayout = (rows: Pick<SceneDoc, 'sceneKey' | 'order'>[]) =>
+  rows
+    .map((s) => `${s.order} ${s.sceneKey}`)
+    .sort()
+    .join('\n');
+
 /**
  * Saves the working text if nobody else saved since `baseVersion`; otherwise throws Conflict with
  * the current server text and version in `details`. Also rewrites the document's scenes and takes
@@ -121,8 +129,12 @@ export async function saveWorkingText(
           current: { text: current?.text ?? '', version: current?.version ?? 0 },
         });
       }
-      await scenes.replaceForDocument(db, where, deriveScenes(ctx, doc, input.text), { session });
+      const priorScenes = await scenes.listForDocument(db, where, { session });
+      const nextScenes = deriveScenes(ctx, doc, input.text);
+      await scenes.replaceForDocument(db, where, nextScenes, { session });
       await updateFirstAppearances(db, session, ctx, doc, input.text);
+      if (sceneLayout(priorScenes) !== sceneLayout(nextScenes))
+        await refreshNarrativeOrders(db, session, ctx);
       if (before) await markStaleOnSave(db, issues, before.text, input.text, { session });
 
       const last = await documentVersions.latestSnapshot(db, where, { session });
