@@ -14,6 +14,7 @@ const TASKS = [
   ['extraction', 'Extraction'],
   ['continuity', 'Continuity checks'],
   ['chat', 'Ask the codex'],
+  ['classification', 'Finding names (first extraction step)'],
 ] as const;
 
 /** Project AI settings (AI-1, AI-10): provider, a model per task, the monthly cap and spend. */
@@ -79,7 +80,7 @@ function Form({
         <p className="text-sm text-muted">Spent this month</p>
         <p className="text-2xl font-semibold">{formatCost(initial.spend.monthTotal)}</p>
         <ul className="text-sm text-muted">
-          {TASKS.map(([task, label]) => (
+          {TASKS.filter(([task]) => task !== 'classification').map(([task, label]) => (
             <li key={task}>
               {label}: {formatCost(initial.spend.byTask[task] ?? 0)}
             </li>

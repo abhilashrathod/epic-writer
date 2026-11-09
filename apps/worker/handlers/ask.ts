@@ -6,11 +6,12 @@ import {
   listEntityTypes,
   listLinkTypes,
   mentions,
+  PLANNED_FIELDS,
   worldSnapshot,
 } from '@epic/core';
 import { readHeadByKey } from '@epic/db';
 import { askInput, askOutput, type AskResultDto } from '@epic/schemas/ai-ask';
-import { prepareAi } from '../ai';
+import { addCosts, prepareAi } from '../ai';
 import type { JobHandler } from '../handlers';
 
 export const PROMPT_VERSION = 'ask-v1';
@@ -38,7 +39,7 @@ export function makeAskHandler(mock: MockResponder = mockAsk): JobHandler {
   return async (job, { db, keySecret }) => {
     const parsed = askInput.safeParse(job.input);
     if (!parsed.success) throw new Invalid('The question is missing or too long');
-    const { question, asOf } = parsed.data;
+    const { question, asOf, includePlanned } = parsed.data;
     const ai = await prepareAi(db, job, 'chat', keySecret, mock);
     const { ctx } = ai;
     const [world, types, linkTypes, calendar] = await Promise.all([
@@ -47,10 +48,18 @@ export function makeAskHandler(mock: MockResponder = mockAsk): JobHandler {
       listLinkTypes(db, ctx),
       readHeadByKey(db, 'calendars', ctx.scope, ctx.project.defaultCalendarKey),
     ]);
+    const relevant = await ai.relevantFields(
+      question,
+      world.entities,
+      types,
+      undefined,
+      includePlanned ? undefined : PLANNED_FIELDS,
+    );
     const cards = buildCodexContext(
       { ...world, types, linkTypes, calendar, units: ctx.project.units },
       asOf,
       question,
+      { relevantFields: relevant.fields, excludePlanned: !includePlanned },
     );
     if (cards.length === 0) {
       const empty: AskResultDto = {
@@ -76,7 +85,7 @@ export function makeAskHandler(mock: MockResponder = mockAsk): JobHandler {
       system: SYSTEM.replace('POINT', point),
       prompt: `Codex cards (the only things known):\n\n${cards.map((c) => c.text).join('\n\n')}\n\nQuestion: ${question}`,
     });
-    const costMicros = await ai.record(usage, PROMPT_VERSION);
+    const costMicros = addCosts(await ai.record(usage, PROMPT_VERSION), relevant.costMicros);
     const known = new Set(cards.map((c) => c.key));
     const result: AskResultDto = {
       answer: object.answer,

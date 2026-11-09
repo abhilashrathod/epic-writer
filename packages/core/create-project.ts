@@ -40,7 +40,14 @@ export async function createProject(db: Db, input: CreateProjectInput): Promise<
           typeGroups: template.typeGroups,
           aiSettings: {
             provider: 'anthropic',
-            models: { extraction: '', continuity: '', suggestions: '', chat: '', embedding: '' },
+            models: {
+              extraction: '',
+              continuity: '',
+              suggestions: '',
+              chat: '',
+              embedding: '',
+              classification: '',
+            },
             autoRun: false,
             monthlyCapMicros: 0,
           },

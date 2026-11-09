@@ -27,6 +27,13 @@ const OP_LABEL: Record<string, string> = {
 };
 
 /** Payload text fields the writer can edit, per op. */
+const FLAG_TEXT: Record<string, string> = {
+  'quote-not-found': 'Quote not found',
+  'value-not-in-choices': 'Value not in choices',
+  'no-anchor': 'No scene or story time',
+};
+const NOT_IN_CHOICES = 'value-not-in-choices';
+
 const EDITABLE: Record<string, { key: string; label: string }[]> = {
   createEntity: [
     { key: 'name', label: 'Name' },
@@ -64,7 +71,8 @@ export function ChangeCard(props: {
   const { change: c, names } = props;
   const p = c.payload;
   const [editing, setEditing] = useState(false);
-  const fields = EDITABLE[c.op] ?? [];
+  const needsNewValue = c.flags.includes(NOT_IN_CHOICES);
+  const fields = needsNewValue ? [{ key: 'value', label: 'Value' }] : (EDITABLE[c.op] ?? []);
   const title = summary(c, names);
   const applied = c.status === 'applied';
   const choosing = c.op === 'createEntity' && c.matchCandidates.length > 0 && !applied;
@@ -101,6 +109,15 @@ export function ChangeCard(props: {
         <span>{Math.round(c.confidence * 100)}% sure</span>
       </div>
       <p className="font-medium">{title}</p>
+      {c.flags.length > 0 && (
+        <ul className="flex flex-wrap gap-1">
+          {c.flags.map((f) => (
+            <li key={f} className="rounded-full bg-bad-soft px-2 py-0.5 text-xs text-bad">
+              {FLAG_TEXT[f] ?? f}
+            </li>
+          ))}
+        </ul>
+      )}
       {typeof p.quote === 'string' && p.quote && (
         <p className="font-script text-sm text-muted">“{p.quote}”</p>
       )}
@@ -157,7 +174,7 @@ export function ChangeCard(props: {
           <div className="flex gap-1">
             <Button
               aria-pressed={c.status === 'accepted'}
-              disabled={props.busy || p.needsChoice === true}
+              disabled={props.busy || p.needsChoice === true || needsNewValue}
               className={c.status === 'accepted' ? 'text-ink' : ''}
               onClick={() =>
                 props.onPatch({ status: c.status === 'accepted' ? 'pending' : 'accepted' })

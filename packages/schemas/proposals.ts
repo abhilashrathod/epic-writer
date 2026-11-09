@@ -24,7 +24,8 @@ export const extractionOutput = z.object({
         type: z.string().min(1).max(100),
         aliases: z.array(z.string().min(1).max(200)).max(20),
         summary: z.string().max(2_000),
-        fields: z.array(z.object({ field: z.string(), value: z.string() })).max(30),
+        // Uncapped here: an overlong answer is trimmed by confidence in code, never failed.
+        fields: z.array(z.object({ field: z.string(), value: z.string(), confidence })),
         /** The existing entry this is, when the text calls it by another name; else null. */
         sameAs: z.string().max(200).nullable(),
         confidence,
@@ -33,7 +34,17 @@ export const extractionOutput = z.object({
     )
     .max(200),
   facts: z
-    .array(z.object({ entry: z.string(), field: z.string(), value: z.string(), confidence, quote }))
+    .array(
+      z.object({
+        entry: z.string(),
+        field: z.string(),
+        value: z.string(),
+        /** The story date if the text states one, in the calendar format the prompt gives. */
+        when: z.string().max(100).nullable(),
+        confidence,
+        quote,
+      }),
+    )
     .max(200),
   links: z
     .array(
@@ -49,6 +60,14 @@ export const extractionOutput = z.object({
     .max(200),
 });
 export type ExtractionOutput = z.infer<typeof extractionOutput>;
+
+/** Pass 1 of extraction: who and what the text names, with candidate entry types. */
+export const mentionOutput = z.object({
+  mentions: z
+    .array(z.object({ name: z.string().min(1).max(200), types: z.array(z.string()).max(3) }))
+    .max(300),
+});
+export type MentionOutput = z.infer<typeof mentionOutput>;
 
 const key = z.string().min(1).max(64);
 /** An entry in a proposal: an existing entry's key, or `new:<n>` for one the proposal creates. */
@@ -122,6 +141,7 @@ export interface ProposalChangeDto {
   confidence: number;
   matchCandidates: { key: string; score: number }[];
   status: ChangeStatus;
+  flags: string[];
 }
 
 export interface ProposalSummaryDto {
@@ -137,6 +157,7 @@ export interface ProposalSummaryDto {
 
 export interface ProposalDto extends ProposalSummaryDto {
   changes: ProposalChangeDto[];
+  warnings: string[];
   appliedSeq: number | null;
   model: string;
   /** The source as the reader sees it now (markers hidden), for highlighting quotes. */

@@ -25,24 +25,47 @@ export async function generateStructured<S extends z.ZodType>(opts: {
   modelId: string;
   schema: S;
   system: string;
+  /** Project-level text that barely changes between runs; sent first so providers can cache it. */
+  stable?: string;
   prompt: string;
-}): Promise<{ object: z.infer<S>; usage: RunUsage }> {
+}): Promise<{ object: z.infer<S>; usage: RunUsage; promptChars: number }> {
   let tokensIn = 0;
   let tokensOut = 0;
   let prompt = opts.prompt;
+  const promptChars = opts.system.length + (opts.stable?.length ?? 0) + opts.prompt.length;
+  // Anthropic only caches up to an explicit marker; other providers ignore it and cache by prefix.
+  const input = (text: string) =>
+    opts.stable
+      ? {
+          messages: [
+            {
+              role: 'user' as const,
+              content: [
+                {
+                  type: 'text' as const,
+                  text: opts.stable,
+                  providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
+                },
+                { type: 'text' as const, text },
+              ],
+            },
+          ],
+        }
+      : { prompt: text };
   for (let attempt = 1; ; attempt++) {
     try {
       const res = await generateObject({
         model: opts.model,
         schema: opts.schema,
         system: opts.system,
-        prompt,
+        ...input(prompt),
       });
       tokensIn += res.usage.inputTokens ?? 0;
       tokensOut += res.usage.outputTokens ?? 0;
       return {
         object: res.object as z.infer<S>,
         usage: { tokensIn, tokensOut, costMicros: costMicros(opts.modelId, tokensIn, tokensOut) },
+        promptChars,
       };
     } catch (err) {
       if (!NoObjectGeneratedError.isInstance(err)) throw err;

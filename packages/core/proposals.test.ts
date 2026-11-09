@@ -9,6 +9,8 @@ import { Invalid } from './errors';
 import {
   applyProposal,
   extractionCodex,
+  extractionScope,
+  MAX_FIELDS_PER_ENTRY,
   extractionSource,
   getProposal,
   listProposals,
@@ -69,11 +71,12 @@ const entry = (
 
 async function propose(out: ExtractionOutput, sceneKey?: string) {
   const source = await extractionSource(db, ctx, { documentKey: episode, sceneKey });
-  const changes = proposalChanges(out, await extractionCodex(db, ctx), source);
+  const { changes, warnings } = proposalChanges(out, await extractionCodex(db, ctx), source);
   const p = await saveProposal(db, ctx, {
     jobId: new ObjectId(),
     source,
     changes,
+    warnings,
     model: 'mock',
     usage: { tokensIn: 1, tokensOut: 1, costMicros: null },
   });
@@ -102,7 +105,14 @@ describe('extraction proposals', () => {
         entry('Unknown Thing', { type: 'No such type' }),
       ],
       facts: [
-        { entry: 'Drona', field: 'Status', value: 'Dead', confidence: 0.9, quote: 'Drona dies' },
+        {
+          entry: 'Drona',
+          field: 'Status',
+          value: 'Dead',
+          when: null,
+          confidence: 0.9,
+          quote: 'Drona dies',
+        },
       ],
       links: [
         { from: 'Drona', type: 'student of', to: 'Partha', note: '', confidence: 0.7, quote: '' },
@@ -132,7 +142,14 @@ describe('extraction proposals', () => {
     const id = await propose({
       entries: [entry('Drona'), entry('Kunti')],
       facts: [
-        { entry: 'Drona', field: 'status', value: 'dead', confidence: 0.9, quote: 'Drona dies' },
+        {
+          entry: 'Drona',
+          field: 'status',
+          value: 'dead',
+          when: null,
+          confidence: 0.9,
+          quote: 'Drona dies',
+        },
       ],
       links: [
         { from: 'Kunti', type: 'parent of', to: 'Partha', note: '', confidence: 0.8, quote: '' },
@@ -215,5 +232,125 @@ describe('extraction proposals', () => {
     const p = await reviewProposal(db, ctx, id, { changes: [{ index: 0, status: 'rejected' }] });
     expect(p.status).toBe('rejected');
     await expect(getProposal(db, ctx, new ObjectId().toHexString())).rejects.toThrow(/not found/);
+  });
+
+  describe('AI access and evidence', () => {
+    const field = (name: string, value: string, confidence = 0.9) => ({
+      field: name,
+      value,
+      confidence,
+    });
+    const fact = (over: Partial<ExtractionOutput['facts'][number]>) => ({
+      entry: 'Partha',
+      field: 'status',
+      value: 'dead',
+      when: null,
+      confidence: 0.9,
+      quote: 'Drona dies',
+      ...over,
+    });
+
+    it('proposes only extract fields, whatever the model returns', async () => {
+      const p = await getProposal(
+        db,
+        ctx,
+        await propose({
+          entries: [
+            entry('Partha', {
+              fields: [field('Want', 'the throne'), field('Status', 'alive'), field('Where', 'x')],
+            }),
+          ],
+          facts: [],
+          links: [],
+        }),
+      );
+      expect(p.changes.map((c) => c.payload.field)).toEqual(['status']);
+      expect(p.warnings[0]).toMatch(/Ignored 1 values/);
+    });
+
+    it('caps fields per entry by confidence with a warning instead of failing', async () => {
+      const fields = Array.from({ length: MAX_FIELDS_PER_ENTRY + 5 }, (_, i) =>
+        field(`Field ${i}`, 'x', i / 100),
+      );
+      fields.push(field('Status', 'dead', 0.01));
+      const p = await getProposal(
+        db,
+        ctx,
+        await propose({ entries: [entry('Partha', { fields })], facts: [], links: [] }),
+      );
+      expect(p.changes.some((c) => c.payload.field === 'status')).toBe(false);
+      expect(p.warnings[0]).toMatch(/kept the 60 surest fields and dropped 6/);
+    });
+
+    it('marks a quote that is not in the text and zeroes its confidence', async () => {
+      const p = await getProposal(
+        db,
+        ctx,
+        await propose({
+          entries: [entry('Drona', { quote: 'Drona   dies\non the field' }), entry('Bhima')],
+          facts: [],
+          links: [],
+        }),
+      );
+      expect(p.changes[0]).toMatchObject({ flags: [], confidence: 0.95 });
+      expect(p.changes[1]).toMatchObject({ flags: ['quote-not-found'], confidence: 0 });
+    });
+
+    it('keeps a value outside the choices, flags it and blocks acceptance until edited', async () => {
+      const id = await propose({
+        entries: [entry('Partha', { fields: [field('Status', 'ascended')] })],
+        facts: [fact({ value: 'vanished' })],
+        links: [],
+      });
+      const p = await getProposal(db, ctx, id);
+      expect(p.changes[0]).toMatchObject({
+        op: 'updateField',
+        payload: { value: 'ascended' },
+        flags: ['value-not-in-choices'],
+      });
+      expect(p.changes[1]).toMatchObject({ op: 'addFact', payload: { value: 'vanished' } });
+      await expect(
+        reviewProposal(db, ctx, id, { changes: [{ index: 1, status: 'accepted' }] }),
+      ).rejects.toThrow(/isn’t one of this field’s choices/);
+      const edited = await reviewProposal(db, ctx, id, {
+        changes: [{ index: 1, payload: { value: 'dead' }, status: 'accepted' }],
+      });
+      expect(edited.changes[1]!.flags).not.toContain('value-not-in-choices');
+    });
+
+    it('anchors facts to their scene and stated date, and flags facts with neither', async () => {
+      const whole = await extractionSource(db, ctx, { documentKey: episode });
+      const codex = await extractionCodex(db, ctx);
+      const era = codex.calendar!.eras[1]!.name;
+      const { changes } = proposalChanges(
+        {
+          entries: [],
+          facts: [fact({ when: `12 ${era}` }), fact({ quote: 'nowhere in the text' })],
+          links: [],
+        },
+        codex,
+        whole,
+      );
+      expect((changes[0]!.payload.narrativeRefs as { sceneKey: string }[])[0]!.sceneKey).toBe('s2');
+      expect(changes[0]!.payload.storyTime).toMatchObject({ precision: 'year' });
+      expect(changes[0]!.flags).toBeUndefined();
+      expect(changes[1]!.flags).toEqual(['quote-not-found', 'no-anchor']);
+    });
+
+    it('scopes pass 2: known names keep their type, others bring their candidates', async () => {
+      const codex = await extractionCodex(db, ctx);
+      const scope = extractionScope(
+        [
+          { name: 'Partha', types: ['Astra'] },
+          { name: 'Hastinapura', types: ['Kingdom', 'No such type'] },
+          { name: 'Zzz', types: ['Nope'] },
+        ],
+        codex,
+        'Partha rides to Hastinapura.',
+      );
+      expect(scope.types.map((t) => t.name).sort()).toEqual(['Character', 'Kingdom']);
+      expect(scope.entries.map((e) => e.name)).toEqual(['Arjuna']);
+      expect(scope.unclassified).toEqual(['Zzz']);
+    });
   });
 });

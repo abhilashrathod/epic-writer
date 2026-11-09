@@ -23,6 +23,7 @@ test('ask the codex: the answer cites the card it used and shows the cost (AI-8,
   await page.goto(`/projects/${project.id}/ask`);
   await expect(page.getByText('Answering as of')).toContainText('the end of the story');
   await page.getByLabel('Your question').fill('Who is the Archer Prince?');
+  await page.getByLabel('Include planned endings').check();
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
 
   const answer = page.getByRole('article', { name: 'Who is the Archer Prince?' });
@@ -31,6 +32,9 @@ test('ask the codex: the answer cites the card it used and shows the cost (AI-8,
   await expect(cards.getByRole('link')).toHaveCount(1);
   await expect(cards.getByRole('link')).toContainText('Archer Prince');
   await expect(answer).toContainText(/This run cost/);
+
+  // The toggle is per question.
+  await expect(page.getByLabel('Include planned endings')).not.toBeChecked();
 
   // A second question moves the first into this session's history.
   await page.getByLabel('Your question').fill('Who rules the moon?');

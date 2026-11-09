@@ -87,7 +87,11 @@ export function ReviewScreen({ proposalId }: { proposalId: string }) {
 
   const accepted = p.changes.filter((c) => c.status === 'accepted').length;
   const sure = p.changes.filter(
-    (c) => c.status === 'pending' && c.confidence >= ACCEPT_ALL_AT && !c.payload.needsChoice,
+    (c) =>
+      c.status === 'pending' &&
+      c.confidence >= ACCEPT_ALL_AT &&
+      !c.payload.needsChoice &&
+      !c.flags.includes('value-not-in-choices'),
   );
   const busy = patch.isPending || apply.isPending;
   const error = patch.error ?? apply.error;
@@ -127,6 +131,13 @@ export function ReviewScreen({ proposalId }: { proposalId: string }) {
         </div>
       </header>
 
+      {p.warnings.length > 0 && (
+        <ul aria-label="Warnings" className="rounded-lg bg-sunk p-3 text-sm text-muted">
+          {p.warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
       {error && (
         <p role="alert" className="rounded-lg bg-bad-soft p-3 text-sm text-bad">
           {error.message}

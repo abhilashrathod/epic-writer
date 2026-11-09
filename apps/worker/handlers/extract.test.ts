@@ -10,12 +10,15 @@ import {
   openProject,
   saveAiKey,
   saveWorkingText,
+  type ExtractionCodex,
+  type ExtractionSource,
   type ProjectContext,
 } from '@epic/core';
 import { aiUsage, col, jobs, readHeads, users } from '@epic/db';
 import { createTestDb } from '@epic/db/testing';
 import { handlers } from '../handlers';
 import { tick } from '../worker';
+import { mentionsPrompt } from './extract';
 
 const SECRET = randomBytes(32).toString('base64');
 let db: Db;
@@ -72,7 +75,7 @@ describe('extract handler', () => {
     expect(spend.byTask.extraction).toBeGreaterThanOrEqual(0);
     expect(await col(db, 'aiUsage').findOne({ jobId: job._id })).toMatchObject({
       task: 'extraction',
-      promptVersion: 'extract-1',
+      promptVersion: 'extract-2',
     });
   });
 
@@ -82,5 +85,28 @@ describe('extract handler', () => {
     expect(p.changes.map((c) => c.payload.name)).toEqual(['Kunti']);
     expect(p.source.text).toBe('EXT. FIELD\n\nKunti waits.');
     expect(await run({})).toMatchObject({ status: 'failed', attempts: 1 });
+  });
+});
+
+describe('mentionsPrompt', () => {
+  const source = { text: 'x', heading: null, document: { title: 'T' } } as ExtractionSource;
+  const type = (description?: string) =>
+    ({
+      name: 'Hut',
+      group: 'land',
+      description,
+      fields: [{ key: 'kind', label: 'Hut kind', ai: 'extract' }],
+    }) as ExtractionCodex['types'][number];
+  const line = (description?: string) =>
+    mentionsPrompt(
+      source,
+      { types: [type(description)], entries: [], linkTypes: [] },
+      new Map([['land', 'Land']]),
+    ).stable;
+
+  it('prefers the description and falls back to a generated line when it is empty', () => {
+    expect(line('A small home.')).toContain('- Hut — A small home.');
+    expect(line('')).toContain('- Hut — Land: Hut kind');
+    expect(line()).toContain('- Hut — Land: Hut kind');
   });
 });

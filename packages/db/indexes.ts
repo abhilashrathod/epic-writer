@@ -109,6 +109,11 @@ export const INDEXES: IndexDef[] = [
   { collection: 'jobs', name: 'queue', spec: { status: 1, runAfter: 1 } },
   { collection: 'jobs', name: 'project_status_type', spec: { projectId: 1, status: 1, type: 1 } },
   { collection: 'aiUsage', name: 'project_at', spec: { projectId: 1, at: 1 } },
+  {
+    collection: 'chunks',
+    name: 'project_branch_source',
+    spec: { projectId: 1, branchId: 1, sourceKind: 1, sourceKey: 1 },
+  },
   { collection: 'users', name: 'email_unique', spec: { email: 1 }, options: { unique: true } },
   {
     collection: 'users',

@@ -93,3 +93,31 @@ export function formatStoryTime(cal: CalendarShape, t: StoryTimeShape | null | u
   };
   return t.end !== null && t.end !== t.start ? `${one(t.start)} – ${one(t.end)}` : one(t.start);
 }
+
+/**
+ * A date written as "<year> <era>", "<month> <year> <era>" or "<day> <month> <year> <era>", or null
+ * when it can't be read. The era may be left out only when the calendar has just one.
+ */
+export function parseStoryDate(cal: CalendarShape, raw: string): StoryTimeShape | null {
+  let text = raw.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  const lower = text.toLowerCase();
+  const era = cal.eras
+    .flatMap((e, i) => [e.name, e.abbr].filter(Boolean).map((label) => ({ label, i })))
+    .sort((a, b) => b.label.length - a.label.length)
+    .find((e) => lower.endsWith(` ${e.label.toLowerCase()}`));
+  if (era) text = text.slice(0, -era.label.length - 1).trim();
+  else if (cal.eras.length !== 1) return null;
+  const m = /^(?:(?:(\d+) )?(.+) )?(\d+)$/u.exec(text);
+  if (!m) return null;
+  const month = m[2]
+    ? cal.months.findIndex((x) => x.name.toLowerCase() === m[2]!.toLowerCase())
+    : 0;
+  const day = m[1] ? Number(m[1]) : 1;
+  const year = Number(m[3]);
+  if (month < 0 || year < 1 || day < 1 || day > cal.months[month]!.days) return null;
+  return {
+    start: toDayIndex(cal, { eraIndex: era?.i ?? 0, year, month: month + 1, day }),
+    end: null,
+    precision: m[1] ? 'day' : m[2] ? 'month' : 'year',
+  };
+}

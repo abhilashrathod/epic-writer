@@ -5,6 +5,7 @@ import {
   toDayIndex,
   yearLength,
   type CalendarShape,
+  parseStoryDate,
 } from './calendar';
 import { DEFAULT_CALENDAR } from './create-project';
 
@@ -76,5 +77,35 @@ describe('calendar', () => {
     );
     expect(formatStoryTime(twoEras, { start: 0, end: 89, precision: 'year' })).toBe('1 AC – 1 AC');
     expect(formatStoryTime(twoEras, null)).toBe('Unknown date');
+  });
+});
+
+describe('parseStoryDate', () => {
+  const cal = {
+    months: [
+      { name: 'Chaitra', days: 30 },
+      { name: 'Late Rain', days: 30 },
+    ],
+    eras: [
+      { name: 'Before Founding', abbr: 'BF', startDay: -1_000_000, direction: -1 as const },
+      { name: 'Founding', abbr: 'F', startDay: 0, direction: 1 as const },
+    ],
+    displayFormat: '{day} {month}, {year} {era}',
+  };
+
+  it('reads year, month and day precision, with era names or abbreviations', () => {
+    expect(parseStoryDate(cal, '2 Founding')).toEqual({ start: 60, end: null, precision: 'year' });
+    expect(parseStoryDate(cal, 'Late Rain 1 F')).toMatchObject({ start: 30, precision: 'month' });
+    expect(parseStoryDate(cal, '3 Chaitra, 1 Founding')).toMatchObject({
+      start: 2,
+      precision: 'day',
+    });
+  });
+
+  it('returns null for what it cannot place', () => {
+    expect(parseStoryDate(cal, 'long ago')).toBeNull();
+    expect(parseStoryDate(cal, '12')).toBeNull();
+    expect(parseStoryDate(cal, 'Nomonth 3 Founding')).toBeNull();
+    expect(parseStoryDate(cal, '45 Chaitra 3 Founding')).toBeNull();
   });
 });

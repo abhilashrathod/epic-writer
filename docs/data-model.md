@@ -38,7 +38,7 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 
 **users** (plain): `email, name, githubLogin, aiKeys[{ provider, encryptedKey, iv, tag, label, last4 }], preferences{ skin, theme, editorFont, defaultTemplate }`.
 
-**projects** (plain): `ownerId, members[{ userId, role }], name, description, templateKey, mainBranchId, seqCounter, defaultCalendarKey, units[{ key, name, abbr, toBase }], typeGroups[{ key, name, order }], aiSettings{ provider, models{ extraction, continuity, suggestions, chat, embedding }, autoRun:false, monthlyCapMicros }, overview, visual, inspirations, archivedAt: Date|null`.
+**projects** (plain): `ownerId, members[{ userId, role }], name, description, templateKey, mainBranchId, seqCounter, defaultCalendarKey, units[{ key, name, abbr, toBase }], typeGroups[{ key, name, order }], aiSettings{ provider, models{ extraction, continuity, suggestions, chat, embedding, classification }, autoRun:false, monthlyCapMicros }, overview, visual, inspirations, archivedAt: Date|null`.
 
 **templates** (plain): `key, name, description, ownerId|null (null = built-in), entityTypes[], linkTypes[], workStructures[{ key, name, medium, levels[] }], structureFrameworks[{ key, name, slots[{ key, label, position }] }], calendarPreset, units[]`.
 
@@ -52,9 +52,10 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 
 ## World (all versioned)
 
-**entityTypes**: `name, pluralName, icon, color, group, parentTypeKey, traits[], fields[{ key, label, kind, options, required, timeVarying, refTypeKeys[] }], order`.
+**entityTypes**: `name, pluralName, description, icon, color, group, parentTypeKey, traits[], fields[{ key, label, kind, options, required, timeVarying, refTypeKeys[], ai }], order`.
 
 - Field kinds: `text, richtext, number, quantity, date (story time), enum, multiEnum, boolean, entityRef, entityRefList, image, list, composition`.
+- `ai`: `'extract'` (extraction may fill it), `'read'` (shown to the AI, never written by it; the default for custom fields) or `'hidden'` (never in any prompt or chunk). Rows saved before `ai` existed resolve through `fieldAi`.
 - Traits: `born, locatable, holdable, hasStrength, ranked, position, institution, ruleSystem, ability, event, secret, setup, account, transport, resource, term, geo`.
 
 **linkTypes**: `label, inverseLabel, kind: 'kinship'|'relation'|'causal'|'ownership'|'location'|'teaching'|'membership'|'knowledge'|'narrative', symmetric, fromTypeKeys[], toTypeKeys[], fields[]`.
@@ -83,17 +84,18 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 
 ## AI (plain)
 
-**proposals**: `projectId, branchId, jobId, source{ kind: 'document'|'import', documentKey, range, documentVersionId }, status: 'pending'|'partially-applied'|'applied'|'rejected', changes[{ op, payload, confidence, matchCandidates[{ key, score }], status }], appliedSeq, model, tokensIn, tokensOut, costMicros`.
+**proposals**: `projectId, branchId, jobId, source{ kind: 'document'|'import', documentKey, range, documentVersionId }, status: 'pending'|'partially-applied'|'applied'|'rejected', changes[{ op, payload, confidence, matchCandidates[{ key, score }], status, flags[] }], warnings[], appliedSeq, model, tokensIn, tokensOut, costMicros`.
 
+- Flags: `quote-not-found` (confidence set to 0), `value-not-in-choices` (kept as written; can't be accepted until edited), `no-anchor` (a fact with no scene and no stated date).
 - Change ops: `createEntity, updateField, addAlias, mergeEntities, createLink, endLink, addFact, createScene, tagScene`.
 
 **continuityIssues**: `projectId, branchId, workKey, documentKey, sceneKey, range, rule, severity: 'info'|'warning'|'error', message, relatedKeys[], checkedSeq, checkedTextHash, status: 'open'|'dismissed'|'fixed'|'stale'`.
 
 - Rules: `dead-character-acts, item-not-held, rule-violation, charges-exhausted, impossible-travel, timeline-clash, contradicts-canon, knowledge-leak, unpaid-setup, rank-mismatch`.
 
-**chunks**: `projectId, branchId, sourceKind: 'entity'|'scene'|'document'|'import', sourceKey, text, embedding number[], embeddingModel, hash`.
+**chunks**: `projectId, branchId, sourceKind: 'entity'|'scene'|'document'|'import', sourceKey, text, embedding number[], embeddingModel, hash`. Entity chunks use `sourceKey` = `<entityKey>#<fieldKey>#<n>`.
 
-**aiUsage**: `projectId, jobId, task: 'extraction'|'continuity'|'suggestion'|'chat'|'embedding', provider, model, promptVersion, tokensIn, tokensOut, costMicros, at`.
+**aiUsage**: `projectId, jobId, task: 'extraction'|'continuity'|'suggestion'|'chat'|'embedding', provider, model, promptVersion, tokensIn, tokensOut, costMicros, pass: 'mentions'|'fields', promptChars, at`.
 
 ## Files and views
 

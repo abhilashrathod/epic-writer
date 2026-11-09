@@ -122,6 +122,68 @@ describe('buildCodexContext', () => {
     expect(textOf(END_OF_TIME)).not.toContain('Ghost');
   });
 
+  describe('card budget', () => {
+    const backstory = 'Raised in exile by the river. '.repeat(40).trim();
+    const withFields = () => {
+      const input = world();
+      input.types[0]!.fields.push(
+        { key: 'backstory', label: 'Backstory', kind: 'richtext', ai: 'read' },
+        { key: 'notes', label: 'Notes', kind: 'richtext', ai: 'hidden' },
+        { key: 'mood', label: 'Mood', kind: 'text', ai: 'extract', timeVarying: true },
+      );
+      input.entities[0]!.fields = {
+        ...input.entities[0]!.fields,
+        backstory,
+        notes: 'Rewrite this arc',
+        mood: 'grim',
+      };
+      return input;
+    };
+    const text = (relevantFields: string[], question = '') =>
+      buildCodexContext(withFields(), END_OF_TIME, question, { relevantFields })
+        .map((c) => c.text)
+        .join(' ');
+
+    it('never includes a hidden field, not even by name', () => {
+      expect(text(['a#notes'], 'Asha')).not.toMatch(/Rewrite this arc|Notes/);
+    });
+
+    it('includes a relevant long field in full, without clipping', () => {
+      expect(text(['a#backstory'])).toContain(`Backstory: ${backstory}`);
+    });
+
+    it('shows a short long-text field, which has no chunk to be ranked by', () => {
+      const input = withFields();
+      input.entities[0]!.fields.backstory = 'Born by the river.';
+      const out = buildCodexContext(input, END_OF_TIME, '').map((x) => x.text);
+      expect(out.join(' ')).toContain('Backstory: Born by the river.');
+    });
+
+    it('omits an irrelevant long field and says it exists', () => {
+      const out = text([]);
+      expect(out).not.toContain('Raised in exile');
+      expect(out).toContain('Also on file, not shown: Backstory');
+    });
+
+    it('leaves planned outcomes out only when asked to', () => {
+      const input = withFields();
+      input.types[0]!.fields.push({ key: 'fate', label: 'Fate', kind: 'text', ai: 'read' });
+      input.entities[0]!.fields.fate = 'Falls at the ford';
+      const run = (excludePlanned: boolean) =>
+        buildCodexContext(input, END_OF_TIME, '', { excludePlanned })
+          .map((x) => x.text)
+          .join(' ');
+      expect(run(false)).toContain('Fate: Falls at the ford');
+      expect(run(true)).not.toMatch(/Fate|Falls at the ford/);
+    });
+
+    it('always includes the summary and current facts, however small the budget', () => {
+      const out = text([]);
+      expect(out).toContain('Summary: A prince.');
+      expect(out).toContain('Mood: grim');
+    });
+  });
+
   it('leaves out facts that have not happened yet', () => {
     const text = textOf(at(1000));
     expect(text).not.toContain('King');

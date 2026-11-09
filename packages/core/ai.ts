@@ -59,7 +59,7 @@ export async function getAiSettings(db: Db, ctx: ProjectContext): Promise<AiSett
   const spend = await aiUsage.spend(db, ctx.project._id, monthStart());
   return {
     provider: (s.provider || 'anthropic') as Provider,
-    models: s.models,
+    models: { classification: '', ...s.models },
     monthlyCapMicros: s.monthlyCapMicros,
     keyProviders: (owner?.aiKeys ?? []).map((k) => k.provider as Provider),
     spend: { monthTotal: spend.total, byTask: spend.byTask },

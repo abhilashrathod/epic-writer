@@ -13,7 +13,9 @@ import {
   type LinkTypeDoc,
   type NarrativeRef,
   type ProposalDoc,
+  type ProposalFlag,
   type StoryTime,
+  type Unit,
   type TextRange,
 } from '@epic/db';
 import { displayText, extractScenes } from '@epic/fountain';
@@ -25,9 +27,13 @@ import {
   type ExtractionOutput,
   type ExtractOp,
   type ProposalDto,
+  type MentionOutput,
   type ProposalPayloads,
   type ProposalSummaryDto,
 } from '@epic/schemas/proposals';
+import { fieldAi } from '@epic/schemas';
+import { parseStoryDate, type CalendarShape } from './calendar';
+import { mentions as textMentions } from './codex-context';
 import { commitInSession, type Change } from './commit';
 import { entityChange, takenSlugs, type PendingEntities } from './entities';
 import { Conflict, DomainError, Invalid, NotFound } from './errors';
@@ -107,44 +113,147 @@ export interface ExtractionCodex {
   entries: EntityDoc[];
   types: EntityTypeDoc[];
   linkTypes: LinkTypeDoc[];
+  calendar?: CalendarShape | null;
+  units?: Unit[];
 }
 
 /** The codex extraction checks against: scrapped entries are left out (AGENTS.md rule 9). */
 export async function extractionCodex(db: Db, ctx: ProjectContext): Promise<ExtractionCodex> {
-  const [entries, types, linkTypes] = await Promise.all([
+  const [entries, types, linkTypes, calendar] = await Promise.all([
     readHeads(db, 'entities', ctx.scope),
     readHeads(db, 'entityTypes', ctx.scope),
     readHeads(db, 'linkTypes', ctx.scope),
+    readHeadByKey(db, 'calendars', ctx.scope, ctx.project.defaultCalendarKey),
   ]);
   return {
     entries: entries.filter((e) => e.canonState !== 'scrapped'),
     types: types.sort((a, b) => a.order - b.order),
     linkTypes,
+    calendar,
+    units: ctx.project.units,
   };
 }
 
 // ---------- model output → proposed changes ----------
 
-/** A model's string value as a field value, or undefined when it can't be one. */
-function coerce(f: FieldDef, raw: string, resolveName: (name: string) => string | null): unknown {
+/**
+ * Pass 2's scope from pass 1's mentions. A mention of a known entry takes that entry's type without
+ * classification; anything else brings its candidate types. Known names in the text count even if
+ * pass 1 missed them.
+ */
+export function extractionScope(
+  found: MentionOutput['mentions'],
+  codex: ExtractionCodex,
+  text: string,
+): { types: EntityTypeDoc[]; entries: EntityDoc[]; unclassified: string[] } {
+  const byName = typeLookup(codex.types);
+  const entries = new Map<string, EntityDoc>();
+  const typeKeys = new Set<string>();
+  const entryByKey = new Map(codex.entries.map((e) => [e.key, e]));
+  const unclassified: string[] = [];
+  const addKnown = (e: EntityDoc) => {
+    entries.set(e.key, e);
+    typeKeys.add(e.typeKey);
+  };
+  for (const m of found) {
+    const hits = matchCandidates([m.name], codex.entries, 3);
+    if (hits[0] && hits[0].score >= STRONG_MATCH) {
+      addKnown(entryByKey.get(hits[0].key)!);
+      continue;
+    }
+    for (const h of hits) entries.set(h.key, entryByKey.get(h.key)!);
+    const candidates = m.types.flatMap((t) => byName.get(normaliseName(t)) ?? []);
+    for (const t of candidates) typeKeys.add(t.key);
+    if (!candidates.length) unclassified.push(m.name);
+  }
+  for (const e of codex.entries)
+    if ([e.name, ...e.aliases].some((n) => textMentions(text, n))) addKnown(e);
+  return {
+    types: codex.types.filter((t) => typeKeys.has(t.key)),
+    entries: [...entries.values()],
+    unclassified,
+  };
+}
+
+function typeLookup(types: EntityTypeDoc[]): Map<string, EntityTypeDoc> {
+  const out = new Map<string, EntityTypeDoc>();
+  for (const t of types) {
+    out.set(normaliseName(t.pluralName), t);
+    out.set(normaliseName(t.name), t);
+  }
+  return out;
+}
+
+/** The per-entry safety net: past this, the least certain fields are dropped with a warning. */
+export const MAX_FIELDS_PER_ENTRY = 60;
+
+type Coerced = { value: unknown; notInChoices?: boolean } | undefined;
+const collapse = (s: string) => s.replace(/\s+/g, ' ').trim();
+const splitItems = (v: string) =>
+  v
+    .split(/\s*[;\n]\s*/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+/**
+ * A model's string value as a field value, or undefined when it can't be one. A choice outside the
+ * field's options is kept as written and marked, so the writer decides.
+ */
+function coerce(
+  f: FieldDef,
+  raw: string,
+  resolveName: (name: string) => string | null,
+  codex: Pick<ExtractionCodex, 'calendar' | 'units'>,
+): Coerced {
   const v = raw.trim();
   if (!v) return undefined;
+  const choice = (x: string) => f.options.find((o) => o.toLowerCase() === x.toLowerCase());
+  const wrap = (value: unknown): Coerced => (value === undefined ? undefined : { value });
   switch (f.kind) {
     case 'text':
     case 'richtext':
-      return v;
+      return { value: v };
     case 'number': {
       const n = Number(v.replace(/,/g, ''));
-      return Number.isFinite(n) ? n : undefined;
+      return Number.isFinite(n) ? { value: n } : undefined;
     }
     case 'enum':
-      return f.options.find((o) => o.toLowerCase() === v.toLowerCase());
+      return choice(v) ? { value: choice(v) } : { value: v, notInChoices: true };
+    case 'multiEnum': {
+      const items = splitItems(v);
+      if (items.every(choice)) return { value: items.map(choice) };
+      return { value: items, notInChoices: true };
+    }
     case 'boolean':
-      return /^(true|yes)$/i.test(v) ? true : /^(false|no)$/i.test(v) ? false : undefined;
+      return wrap(/^(true|yes)$/i.test(v) ? true : /^(false|no)$/i.test(v) ? false : undefined);
     case 'entityRef':
-      return resolveName(v) ?? undefined;
+      return wrap(resolveName(v) ?? undefined);
+    case 'entityRefList': {
+      const keys = splitItems(v).flatMap((x) => resolveName(x) ?? []);
+      return keys.length ? { value: [...new Set(keys)] } : undefined;
+    }
+    case 'list':
+      return { value: splitItems(v) };
+    case 'date':
+      return wrap((codex.calendar && parseStoryDate(codex.calendar, v)) || undefined);
+    case 'quantity': {
+      const m = /^([\d.,]+)\s*(.*)$/.exec(v);
+      const unitName = m?.[2]?.toLowerCase();
+      const unit = codex.units?.find((u) =>
+        [u.key, u.abbr, u.name].some((x) => x.toLowerCase() === unitName),
+      );
+      return m && unit
+        ? { value: { value: Number(m[1]!.replace(/,/g, '')), unitKey: unit.key } }
+        : undefined;
+    }
+    case 'composition': {
+      const rows = splitItems(v).flatMap((x) => {
+        const m = /^(.+?)[\s:=]+([\d,]+)$/.exec(x);
+        return m ? [{ label: m[1]!.trim(), count: Number(m[2]!.replace(/,/g, '')) }] : [];
+      });
+      return rows.length ? { value: rows } : undefined;
+    }
     default:
-      // Dates, quantities and lists need more than a string; the writer adds them by hand.
       return undefined;
   }
 }
@@ -163,13 +272,20 @@ const fieldNamed = (type: EntityTypeDoc | undefined, name: string) => {
 export function proposalChanges(
   out: ExtractionOutput,
   codex: ExtractionCodex,
-  source: Pick<ExtractionSource, 'document' | 'scenes'>,
-): ProposalChange[] {
-  const typeByName = new Map<string, EntityTypeDoc>();
-  for (const t of codex.types) {
-    typeByName.set(normaliseName(t.pluralName), t);
-    typeByName.set(normaliseName(t.name), t);
-  }
+  source: Pick<ExtractionSource, 'document' | 'scenes' | 'text'>,
+): { changes: ProposalChange[]; warnings: string[] } {
+  const typeByName = typeLookup(codex.types);
+  const warnings: string[] = [];
+  let refused = 0;
+  /** Only `extract` fields can be proposed, whatever the model sends back. */
+  const extractable = (type: EntityTypeDoc | undefined, name: string) => {
+    const f = fieldNamed(type, name);
+    if (f && fieldAi(f) !== 'extract') {
+      refused += 1;
+      return undefined;
+    }
+    return f;
+  };
   const entryByKey = new Map(codex.entries.map((e) => [e.key, e]));
   const typeOfRef = new Map<string, EntityTypeDoc>();
   const named = new Map<string, string>(); // normalised name → key or new ref
@@ -209,28 +325,53 @@ export function proposalChanges(
   });
 
   const changes: ProposalChange[] = [];
+  const haystack = collapse(source.text);
   const push = <K extends ExtractOp>(
     op: K,
     payload: Record<string, unknown>,
     confidence: number,
     candidates: { key: string; score: number }[] = [],
-  ) =>
+    extraFlags: ProposalFlag[] = [],
+  ) => {
+    const quote = collapse(String(payload.quote ?? ''));
+    const found = quote !== '' && haystack.includes(quote);
+    const flags: ProposalFlag[] = found ? extraFlags : ['quote-not-found', ...extraFlags];
     changes.push({
       op,
       payload: PROPOSAL_PAYLOADS[op].parse(payload) as Record<string, unknown>,
-      confidence: Math.round(confidence * 100) / 100,
+      confidence: found ? Math.round(confidence * 100) / 100 : 0,
       matchCandidates: candidates,
       status: 'pending',
+      ...(flags.length ? { flags } : {}),
     });
+  };
 
   // Pass 2: entries.
   for (const { e, names, candidates, existing, type, ref } of decided) {
-    const fields: Record<string, unknown> = {};
-    for (const { field, value } of e.fields) {
-      const f = fieldNamed(type, field);
-      const v = f && coerce(f, value, resolveName);
-      if (f && v !== undefined && v !== ref) fields[f.key] = v;
+    const fields: Record<string, { value: unknown; confidence: number }> = {};
+    const outOfChoices: { key: string; value: unknown; confidence: number }[] = [];
+    const ranked = [...e.fields].sort((a, b) => b.confidence - a.confidence);
+    if (ranked.length > MAX_FIELDS_PER_ENTRY)
+      warnings.push(
+        `"${e.name}": kept the ${MAX_FIELDS_PER_ENTRY} surest fields and dropped ${ranked.length - MAX_FIELDS_PER_ENTRY}.`,
+      );
+    for (const { field, value, confidence } of ranked.slice(0, MAX_FIELDS_PER_ENTRY)) {
+      const f = extractable(type, field);
+      const v = f && coerce(f, value, resolveName, codex);
+      if (!f || !v || v.value === ref) continue;
+      if (v.notInChoices) outOfChoices.push({ key: f.key, value: v.value, confidence });
+      else fields[f.key] = { value: v.value, confidence };
     }
+    const flagged = (entity: string) => {
+      for (const o of outOfChoices)
+        push(
+          'updateField',
+          { entity, field: o.key, value: o.value, quote: e.quote },
+          o.confidence,
+          [],
+          ['value-not-in-choices'],
+        );
+    };
     if (!existing) {
       push(
         'createEntity',
@@ -240,13 +381,14 @@ export function proposalChanges(
           name: e.name,
           aliases: e.aliases.filter((a) => a.trim() && normaliseName(a) !== normaliseName(e.name)),
           summary: e.summary,
-          fields,
+          fields: Object.fromEntries(Object.entries(fields).map(([k, x]) => [k, x.value])),
           needsChoice: candidates.length > 0,
           quote: e.quote,
         },
         e.confidence,
         candidates,
       );
+      flagged(ref);
       continue;
     }
     const known = new Set([existing.name, ...existing.aliases].map(normaliseName));
@@ -260,31 +402,51 @@ export function proposalChanges(
         candidates,
       );
     }
-    for (const [field, value] of Object.entries(fields)) {
+    for (const [field, { value, confidence }] of Object.entries(fields)) {
       if (JSON.stringify(existing.fields[field]) === JSON.stringify(value)) continue;
-      push('updateField', { entity: existing.key, field, value, quote: e.quote }, e.confidence);
+      push('updateField', { entity: existing.key, field, value, quote: e.quote }, confidence);
     }
+    flagged(existing.key);
   }
 
-  // Facts happen at the document's story time (if set) and the scene the quote is in.
-  const storyTime: StoryTime = source.document.storyTime ?? {
+  // A fact sits in the scene its quote is in, at the date the text states, else the document's.
+  const documentTime: StoryTime = source.document.storyTime ?? {
     start: 0,
     end: null,
     precision: 'unknown',
   };
-  const placeOf = (quote: string) =>
-    quote.trim() ? source.scenes.find((s) => s.text.includes(quote.trim()))?.ref : undefined;
+  const onlyScene = source.scenes.length === 1 ? source.scenes[0]!.ref : undefined;
+  const placeOf = (quote: string) => {
+    const q = collapse(quote);
+    return (
+      (q ? source.scenes.find((s) => collapse(s.text).includes(q))?.ref : undefined) ?? onlyScene
+    );
+  };
   for (const f of out.facts) {
     const entity = resolveName(f.entry);
-    const field = entity ? fieldNamed(typeOf(entity), f.field) : undefined;
+    const field = entity ? extractable(typeOf(entity), f.field) : undefined;
     if (!entity || !field?.timeVarying) continue;
-    const value = coerce(field, f.value, resolveName);
-    if (value === undefined) continue;
+    const coerced = coerce(field, f.value, resolveName, codex);
+    if (coerced === undefined) continue;
     const at = placeOf(f.quote);
+    const stated = f.when && codex.calendar ? parseStoryDate(codex.calendar, f.when) : null;
+    const extra: ProposalFlag[] = [
+      ...(coerced.notInChoices ? (['value-not-in-choices'] as const) : []),
+      ...(!at && !stated ? (['no-anchor'] as const) : []),
+    ];
     push(
       'addFact',
-      { entity, field: field.key, value, storyTime, narrativeRefs: at ? [at] : [], quote: f.quote },
+      {
+        entity,
+        field: field.key,
+        value: coerced.value,
+        storyTime: stated ?? documentTime,
+        narrativeRefs: at ? [at] : [],
+        quote: f.quote,
+      },
       f.confidence,
+      [],
+      extra,
     );
   }
 
@@ -299,7 +461,8 @@ export function proposalChanges(
     if (normaliseName(type.label) !== label) [from, to] = [to, from];
     push('createLink', { typeKey: type.key, from, to, note: l.note, quote: l.quote }, l.confidence);
   }
-  return changes;
+  if (refused) warnings.push(`Ignored ${refused} values for fields the AI may not write.`);
+  return { changes, warnings };
 }
 
 /** Stores one extraction run's proposal (AGENTS.md rule 7: AI output never writes the codex). */
@@ -310,6 +473,7 @@ export function saveProposal(
     jobId: ObjectId;
     source: ExtractionSource;
     changes: ProposalChange[];
+    warnings?: string[];
     model: string;
     usage: { tokensIn: number; tokensOut: number; costMicros: number | null };
   },
@@ -325,6 +489,7 @@ export function saveProposal(
     },
     status: 'pending',
     changes: p.changes,
+    ...(p.warnings?.length ? { warnings: p.warnings } : {}),
     appliedSeq: null,
     model: p.model,
     tokensIn: p.usage.tokensIn,
@@ -395,7 +560,13 @@ export async function getProposal(db: Db, ctx: ProjectContext, id: string): Prom
   }
   return {
     ...summary(p),
-    changes: p.changes.map((c, index) => ({ ...c, index, status: c.status as ChangeStatus })),
+    changes: p.changes.map((c, index) => ({
+      ...c,
+      index,
+      status: c.status as ChangeStatus,
+      flags: c.flags ?? [],
+    })),
+    warnings: p.warnings ?? [],
     appliedSeq: p.appliedSeq,
     model: p.model,
     source,
@@ -427,11 +598,17 @@ export async function reviewProposal(
       const parsed = schema.safeParse({ ...c.payload, ...edit.payload, ...locked });
       if (!parsed.success) throw new Invalid(parsed.error.issues[0]?.message ?? 'Invalid change');
       c.payload = parsed.data as Record<string, unknown>;
+      // A retyped value is checked against the type's choices when the change is committed.
+      if ('value' in edit.payload) c.flags = c.flags?.filter((f) => f !== 'value-not-in-choices');
     }
     if (edit.status) {
       if (edit.status === 'accepted' && c.op === 'createEntity' && c.payload.needsChoice)
         throw new Invalid(
           `Choose whether "${String(c.payload.name)}" is a new entry or one you already have`,
+        );
+      if (edit.status === 'accepted' && c.flags?.includes('value-not-in-choices'))
+        throw new Invalid(
+          `"${String(c.payload.value)}" isn’t one of this field’s choices. Edit it or reject the change.`,
         );
       c.status = edit.status;
     }

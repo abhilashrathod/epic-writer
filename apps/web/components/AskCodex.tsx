@@ -28,6 +28,7 @@ export function AskCodex() {
   const tree = useTree(projectId);
   const { run, job, running, startError, reset } = useAiJob(projectId, 'ask');
   const [question, setQuestion] = useState('');
+  const [includePlanned, setIncludePlanned] = useState(false);
   const [current, setCurrent] = useState<Asked | null>(null);
   const [past, setPast] = useState<(Asked & { job: JobDto })[]>([]);
 
@@ -53,7 +54,9 @@ export function AskCodex() {
     reset();
     setCurrent({ question: q, when });
     setQuestion('');
-    run({ question: q, asOf });
+    run({ question: q, asOf, includePlanned });
+    // Per question: a spoiler-free answer stays the default for the next one.
+    setIncludePlanned(false);
   }
 
   return (
@@ -86,6 +89,15 @@ export function AskCodex() {
           maxLength={2000}
           className={`resize-y rounded-lg bg-sunk px-3 py-2 placeholder:text-faint ${focusRing}`}
         />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={includePlanned}
+            onChange={(e) => setIncludePlanned(e.target.checked)}
+          />{' '}
+          Include planned endings
+          <span className="text-xs text-muted">Fate, true meanings, payoffs and answers</span>
+        </label>
         <div className="flex items-center gap-3">
           <Button type="submit" variant="primary" disabled={running || !question.trim()}>
             {running ? 'Asking…' : 'Ask'}

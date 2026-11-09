@@ -3,6 +3,7 @@ import { ObjectId, type ClientSession, type Db } from 'mongodb';
 import {
   continuityIssues,
   projects,
+  readHeadByKey,
   readHeads,
   scenes,
   type ContinuityIssueDoc,
@@ -11,7 +12,9 @@ import {
 } from '@epic/db';
 import { extractScenes, findMarkers } from '@epic/fountain';
 import type { ContinuityIssueDto } from '@epic/schemas/continuity';
-import { resolveFields, timedStatus, type AsOf } from './asof';
+import { timedStatus, type AsOf } from './asof';
+import type { ChunkableEntity, ChunkableType } from './chunks';
+import { buildCodexContext } from './codex-context';
 import {
   changedSpan,
   checkContinuityRules,
@@ -37,7 +40,6 @@ export interface ContinuityRun {
 }
 
 const MAX_CONTEXT_ENTRIES = 60;
-const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**
  * Loads a document and its world and runs the plain-code rules (AI-6). The AI pass then works
@@ -47,14 +49,21 @@ export async function prepareContinuity(
   db: Db,
   ctx: ProjectContext,
   documentKey: string,
+  retrieve?: (
+    query: string,
+    entities: ChunkableEntity[],
+    types: ChunkableType[],
+    only: Set<string>,
+  ) => Promise<string[]>,
 ): Promise<ContinuityRun> {
   const { document, text } = await getWorkingText(db, ctx, documentKey);
-  const [world, types, linkTypes, sceneRows, project] = await Promise.all([
+  const [world, types, linkTypes, sceneRows, project, calendar] = await Promise.all([
     worldSnapshot(db, ctx),
     readHeads(db, 'entityTypes', ctx.scope),
     readHeads(db, 'linkTypes', ctx.scope),
     scenes.listForDocument(db, { ...ctx.scope, documentKey }),
     projects.findById(db, ctx.project._id),
+    readHeadByKey(db, 'calendars', ctx.scope, ctx.project.defaultCalendarKey),
   ]);
   const ruleWorld: RuleWorld = { types, entities: world.entities, facts: world.facts };
   const sceneTimes = Object.fromEntries(
@@ -82,30 +91,16 @@ export async function prepareContinuity(
     findMarkers(text).flatMap((m) => (m.key && m.kind === 'mention' ? [m.key] : [])),
   );
   const byKey = new Map(world.entities.map((e) => [e.key, e]));
-  const typeBy = new Map(types.map((t) => [t.key, t]));
   const entries = world.entities.filter((e) => mentioned.has(e.key)).slice(0, MAX_CONTEXT_ENTRIES);
-  const lines = entries.map((e) => {
-    const type = typeBy.get(e.typeKey);
-    const values = resolveFields(
-      e.fields,
-      world.facts.filter((f) => f.entityKey === e.key),
-      asOf,
-    );
-    const shown = (type?.fields ?? []).flatMap((f) => {
-      const v = values[f.key];
-      if (v === null || v === undefined || v === '') return [];
-      if (f.kind === 'entityRef' && typeof v === 'string')
-        return [`${f.label}: ${byKey.get(v)?.name ?? '?'}`];
-      if (typeof v === 'string' || typeof v === 'number')
-        return [`${f.label}: ${clip(String(v), 160)}`];
-      if (f.kind === 'date' && typeof v === 'object' && 'start' in v)
-        return [`${f.label}: day ${String(v.start)}`];
-      return [];
-    });
-    const aliases = e.aliases.length ? ` (also ${e.aliases.join(', ')})` : '';
-    const summary = e.summary ? ` ${clip(e.summary, 240)}` : '';
-    return `- [${e.key}] ${e.name}${aliases}, ${type?.name ?? 'entry'}.${summary}${shown.length ? ` ${shown.join('; ')}.` : ''}`;
-  });
+  const relevantFields = retrieve
+    ? await retrieve(text, world.entities, types, new Set(entries.map((e) => e.key)))
+    : [];
+  const lines = buildCodexContext(
+    { ...world, entities: entries, types, linkTypes, calendar, units: ctx.project.units },
+    asOf,
+    text,
+    { maxCards: MAX_CONTEXT_ENTRIES, relevantFields },
+  ).map((c) => c.text);
   const labels = new Map(linkTypes.map((l) => [l.key, l.label]));
   const linkLines = world.links
     .filter(

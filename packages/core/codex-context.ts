@@ -2,7 +2,9 @@
 // Only what applies at that point goes in, so an answer can't leak what the reader hasn't reached.
 
 import { lifeAt, lifeFields, resolveFields, timedStatus, type AsOf } from './asof';
+import { fieldAi, type FieldAiAccess } from '@epic/schemas';
 import { formatStoryTime, type CalendarShape, type StoryTimeShape } from './calendar';
+import { fieldRef, LONG_FIELD_CHARS } from './chunks';
 
 interface Ref {
   workKey: string;
@@ -44,7 +46,13 @@ export interface ContextType {
   key: string;
   name: string;
   traits: string[];
-  fields: { key: string; label: string; kind: string }[];
+  fields: {
+    key: string;
+    label: string;
+    kind: string;
+    timeVarying?: boolean;
+    ai?: FieldAiAccess;
+  }[];
 }
 
 export interface ContextLinkType {
@@ -71,9 +79,13 @@ export interface CodexCard {
 }
 
 const PROMINENCE_RANK: Record<string, number> = { main: 0, supporting: 1, minor: 2, background: 3 };
-const SUMMARY_MAX = 600;
-const VALUE_MAX = 200;
 const NOTE_MAX = 120;
+/** The writer's planned outcomes. Ask leaves them out unless the question opts in. */
+export const PLANNED_FIELDS = new Set(['fate', 'trueMeaning', 'payoff', 'answer', 'writerSNote']);
+const CHARS_PER_TOKEN = 4;
+/** Room for optional fields on a card. Entries the question is about get more. */
+const CARD_TOKENS = 400;
+const FOCUS_CARD_TOKENS = 2_000;
 
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -140,9 +152,15 @@ export function buildCodexContext(
   input: CodexContextInput,
   asOf: AsOf,
   question: string,
-  opts: { maxCards?: number; maxChars?: number } = {},
+  opts: {
+    maxCards?: number;
+    maxChars?: number;
+    relevantFields?: string[];
+    excludePlanned?: boolean;
+  } = {},
 ): CodexCard[] {
   const { maxCards = 40, maxChars = 24_000 } = opts;
+  const relevance = new Map((opts.relevantFields ?? []).map((ref, i) => [ref, i]));
   const entities = input.entities.filter((e) => e.canonState !== 'scrapped');
   const names = new Map(entities.map((e) => [e.key, e.name]));
   const types = new Map(input.types.map((t) => [t.key, t]));
@@ -178,7 +196,7 @@ export function buildCodexContext(
     const lines = [
       `[${e.key}] ${e.name} (${type?.name ?? 'Entry'})${e.aliases.length ? ` — also ${e.aliases.join(', ')}` : ''}`,
     ];
-    if (e.summary) lines.push(`Summary: ${clip(e.summary, SUMMARY_MAX)}`);
+    if (e.summary) lines.push(`Summary: ${e.summary}`);
     let hidden: string | undefined;
     if (type?.traits.includes('born')) {
       const life = lifeAt(input.calendar, type.fields, values, asOf.storyTime);
@@ -188,14 +206,34 @@ export function buildCodexContext(
       // A death date after this point would give away the future.
       if (life.status !== 'dead') hidden = lifeFields(type.fields).died;
     }
-    const fields = (type?.fields ?? [])
-      .filter((f) => f.key !== hidden)
-      .map((f) => {
-        const v = formatValue(f.kind, values[f.key], input, names);
-        return v === null ? null : `${f.label}: ${clip(v, VALUE_MAX)}`;
-      })
-      .filter(Boolean);
-    if (fields.length) lines.push(`Fields: ${fields.join('; ')}`);
+    const shown = (type?.fields ?? []).flatMap((f) => {
+      if (f.key === hidden || fieldAi(f) === 'hidden') return [];
+      if (opts.excludePlanned && PLANNED_FIELDS.has(f.key)) return [];
+      const v = formatValue(f.kind, values[f.key], input, names);
+      if (v === null) return [];
+      const rank = relevance.get(fieldRef(e.key, f.key));
+      return [{ f, v, rank, text: `${f.label}: ${v}` }];
+    });
+    const always = shown.filter((x) => x.f.timeVarying);
+    const optional = shown.filter((x) => !x.f.timeVarying);
+    // Only values this long are chunked, so only they can be ranked as relevant.
+    const isLong = (x: (typeof shown)[number]) => x.v.length >= LONG_FIELD_CHARS;
+    const short = optional.filter((x) => !isLong(x));
+    const long = optional.filter(isLong);
+    const relevant = long.filter((x) => x.rank !== undefined).sort((a, b) => a.rank! - b.rank!);
+    const focused = named.has(e.key) || relevant.length > 0;
+    let room = (focused ? FOCUS_CARD_TOKENS : CARD_TOKENS) * CHARS_PER_TOKEN;
+    const kept = [...short, ...relevant].filter((x) => {
+      if (x.text.length > room) return false;
+      room -= x.text.length;
+      return true;
+    });
+    const included = new Set(kept);
+    const omitted = optional.filter((x) => !included.has(x));
+    if (always.length || kept.length)
+      lines.push(`Fields: ${[...always, ...kept].map((x) => x.text).join('; ')}`);
+    if (omitted.length)
+      lines.push(`Also on file, not shown: ${omitted.map((x) => x.f.label).join(', ')}`);
     const conns = (linksBy.get(e.key) ?? []).map((l) => {
       const lt = linkTypes.get(l.typeKey);
       const out = l.fromKey === e.key;

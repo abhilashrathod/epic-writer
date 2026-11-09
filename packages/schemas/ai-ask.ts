@@ -10,6 +10,8 @@ export const askInput = z.object({
       order: z.string().min(1).nullable(),
     })
     .default({ storyTime: null, workKey: null, order: null }),
+  /** Lets this question see the writer's planned outcomes (Fate, True meaning, Payoff...). */
+  includePlanned: z.boolean().default(false),
 });
 
 /** What the model must return for an `ask` job; `citedKeys` are the cards it used. */

@@ -6,7 +6,7 @@ import {
   storeContinuityRun,
 } from '@epic/core';
 import { continuityAiOutput, continuityJobInput } from '@epic/schemas/continuity';
-import { prepareAi } from '../ai';
+import { addCosts, prepareAi } from '../ai';
 import type { JobHandler } from '../handlers';
 
 export const PROMPT_VERSION = 'continuity-v1';
@@ -44,7 +44,17 @@ export function mockContinuity(prompt: string): unknown {
 export const continuityHandler: JobHandler = async (job, { db, keySecret }) => {
   const { documentKey } = continuityJobInput.parse(job.input);
   const ai = await prepareAi(db, job, 'continuity', keySecret, mockContinuity);
-  const run = await prepareContinuity(db, ai.ctx, documentKey);
+  let embedCost: number | null = 0;
+  const run = await prepareContinuity(
+    db,
+    ai.ctx,
+    documentKey,
+    async (query, entities, types, only) => {
+      const res = await ai.relevantFields(query, entities, types, only);
+      embedCost = res.costMicros;
+      return res.fields;
+    },
+  );
 
   const { object, usage } = await generateStructured({
     model: ai.model,
@@ -53,7 +63,7 @@ export const continuityHandler: JobHandler = async (job, { db, keySecret }) => {
     system: SYSTEM,
     prompt: `${run.context}\n\nTEXT:\n${readableText(run.text).display}`,
   });
-  const cost = await ai.record(usage, PROMPT_VERSION);
+  const cost = addCosts(await ai.record(usage, PROMPT_VERSION), embedCost);
 
   const found = locateQuotedIssues(run, object.issues);
 

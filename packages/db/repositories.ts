@@ -2,6 +2,7 @@ import { ObjectId, type ClientSession, type Db } from 'mongodb';
 import { col } from './client';
 import type {
   AiUsageDoc,
+  ChunkDoc,
   AssetDoc,
   BranchDoc,
   CommitDoc,
@@ -21,6 +22,7 @@ import type {
 export const SYSTEM_PROJECT_ID = new ObjectId('000000000000000000000000');
 
 type Opts = { session?: ClientSession };
+type BranchRef = { projectId: ObjectId; branchId: ObjectId };
 /** Insert input: `_id` is optional so callers can pre-allocate ids that reference each other. */
 type NewDoc<T> = Omit<T, '_id' | 'createdAt' | 'updatedAt'> & { _id?: ObjectId };
 
@@ -149,6 +151,22 @@ export const projectSettings = {
 };
 
 // ---------- aiUsage ----------
+
+export const chunks = {
+  listForKind: (db: Db, p: BranchRef, sourceKind: ChunkDoc['sourceKind']) =>
+    col(db, 'chunks').find({ projectId: p.projectId, branchId: p.branchId, sourceKind }).toArray(),
+  async insertMany(db: Db, docs: NewDoc<ChunkDoc>[]): Promise<void> {
+    if (docs.length) await col(db, 'chunks').insertMany(docs.map((d) => stamp<ChunkDoc>(d)));
+  },
+  async deleteByIds(db: Db, p: BranchRef, ids: ObjectId[]): Promise<void> {
+    if (ids.length)
+      await col(db, 'chunks').deleteMany({
+        projectId: p.projectId,
+        branchId: p.branchId,
+        _id: { $in: ids },
+      });
+  },
+};
 
 export const aiUsage = {
   async record(db: Db, doc: Omit<AiUsageDoc, '_id' | 'createdAt' | 'updatedAt'>): Promise<void> {
