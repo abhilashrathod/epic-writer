@@ -194,6 +194,60 @@ export function currentNarrativeOrder(r: NarrativeRefValue, index: NarrativeInde
   return s?.order ?? `${d.orderPath}.${r.order?.split('.').pop()}`;
 }
 
+/** Where each document and scene sits now, by key: the `narrativeOrder` collection, read in. */
+export type NarrativeOrders = ReadonlyMap<string, { workKey: string; order: string }>;
+
+interface Place {
+  workKey: string | null;
+  documentKey: string | null;
+  sceneKey: string | null;
+  order: string | null;
+}
+
+/**
+ * The reference at its current position. Its stored order is only what was true when it was
+ * written, used when nothing is known of its keys. A scene that has gone keeps its number under
+ * its episode's current position.
+ */
+export function placedRef<T extends Place>(r: T, orders: NarrativeOrders): T {
+  const scene = r.sceneKey ? orders.get(r.sceneKey) : undefined;
+  if (scene) return { ...r, ...scene };
+  const doc = r.documentKey ? orders.get(r.documentKey) : undefined;
+  if (!doc) return r;
+  const order = r.sceneKey ? `${doc.order}.${r.order?.split('.').pop()}` : doc.order;
+  return { ...r, workKey: doc.workKey, order };
+}
+
+export const placedRefs = <T extends Place>(refs: T[] = [], orders: NarrativeOrders): T[] =>
+  refs.map((r) => placedRef(r, orders));
+
+/** The `narrativeOrder` rows `index` implies. A scene key found twice counts at its earliest. */
+export function narrativeOrderRows(index: NarrativeIndex) {
+  const docs = new Map(index.documents.map((d) => [d.key, d]));
+  const rows = new Map<
+    string,
+    { workKey: string; targetKind: 'document' | 'scene'; targetKey: string; order: string }
+  >();
+  for (const d of index.documents)
+    rows.set(d.key, {
+      workKey: d.workKey,
+      targetKind: 'document',
+      targetKey: d.key,
+      order: endOf(index, d),
+    });
+  for (const s of [...index.scenes].sort((a, b) => a.order.localeCompare(b.order))) {
+    const d = docs.get(s.documentKey);
+    if (!d || rows.has(s.sceneKey)) continue;
+    rows.set(s.sceneKey, {
+      workKey: d.workKey,
+      targetKind: 'scene',
+      targetKey: s.sceneKey,
+      order: s.order,
+    });
+  }
+  return [...rows.values()];
+}
+
 /**
  * The reference with its work and order taken from its keys, or null when its episode or scene no
  * longer exists. Label-only items pass through.

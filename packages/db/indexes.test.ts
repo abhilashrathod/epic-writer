@@ -10,8 +10,8 @@ beforeAll(async () => ({ db, drop } = await createTestDb()));
 afterAll(() => drop());
 
 describe('ensureIndexes', () => {
-  it('creates all 26 collections and every index', async () => {
-    expect(ALL_COLLECTIONS).toHaveLength(26);
+  it('creates all 27 collections and every index', async () => {
+    expect(ALL_COLLECTIONS).toHaveLength(27);
     const names = (await db.listCollections().toArray()).map((c) => c.name);
     expect(names.sort()).toEqual([...ALL_COLLECTIONS].sort());
     for (const { collection, name } of INDEXES) {

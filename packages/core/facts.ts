@@ -5,6 +5,8 @@ import { entityFieldsSchema } from '@epic/schemas/entity-fields';
 import { commit, versionBody, type Change } from './commit';
 import type { PendingEntities } from './entities';
 import { Invalid, NotFound } from './errors';
+import { loadNarrativeOrders } from './narrative-index';
+import { placedRefs, type NarrativeOrders } from './narrative-refs';
 import type { ProjectContext } from './works';
 
 const author = (ctx: ProjectContext) => ({ kind: 'user' as const, userId: ctx.userId });
@@ -134,29 +136,49 @@ export async function listFacts(
   ctx: ProjectContext,
   entityKey: string,
 ): Promise<FactDoc[]> {
-  const facts = await readHeads(db, 'facts', ctx.scope, { entityKey });
-  return facts.sort((a, b) => a.storyTime.start - b.storyTime.start);
+  const [facts, orders] = await Promise.all([
+    readHeads(db, 'facts', ctx.scope, { entityKey }),
+    loadNarrativeOrders(db, ctx),
+  ]);
+  return facts
+    .map((f) => ({ ...f, narrativeRefs: placedRefs(f.narrativeRefs, orders) }))
+    .sort((a, b) => a.storyTime.start - b.storyTime.start);
 }
 
 /**
  * The whole codex graph for time-aware views (GR-1 to GR-7), which resolve "as of" client-side.
- * Scrapped entries, links and facts are left out (AGENTS.md rule 9).
+ * Scrapped entries, links and facts are left out (AGENTS.md rule 9). Every reference comes back
+ * at its current position, so "as of" rules can compare orders directly.
  */
 export async function worldSnapshot(
   db: Db,
   ctx: ProjectContext,
-): Promise<{ entities: EntityDoc[]; links: LinkDoc[]; facts: FactDoc[] }> {
-  const [entities, links, facts] = await Promise.all([
+): Promise<{
+  entities: EntityDoc[];
+  links: LinkDoc[];
+  facts: FactDoc[];
+  orders: NarrativeOrders;
+}> {
+  const [entities, links, facts, orders] = await Promise.all([
     readHeads(db, 'entities', ctx.scope),
     readHeads(db, 'links', ctx.scope),
     readHeads(db, 'facts', ctx.scope),
+    loadNarrativeOrders(db, ctx),
   ]);
   const live = (x: { canonState: string }) => x.canonState !== 'scrapped';
   const kept = entities.filter(live);
   const ids = new Set(kept.map((e) => e.key));
   return {
-    entities: kept,
-    links: links.filter((l) => live(l) && ids.has(l.fromKey) && ids.has(l.toKey)),
-    facts: facts.filter((f) => live(f) && ids.has(f.entityKey)),
+    entities: kept.map((e) => ({
+      ...e,
+      firstAppearances: placedRefs(e.firstAppearances, orders),
+    })),
+    links: links
+      .filter((l) => live(l) && ids.has(l.fromKey) && ids.has(l.toKey))
+      .map((l) => ({ ...l, narrativeRefs: placedRefs(l.narrativeRefs, orders) })),
+    facts: facts
+      .filter((f) => live(f) && ids.has(f.entityKey))
+      .map((f) => ({ ...f, narrativeRefs: placedRefs(f.narrativeRefs, orders) })),
+    orders,
   };
 }

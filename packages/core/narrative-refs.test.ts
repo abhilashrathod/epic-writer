@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalNarrativeRef,
   currentNarrativeOrder,
+  narrativeOrderRows,
+  placedRef,
+  placedRefs,
   describeNarrativeRef,
   labelOnlyRef,
   narrativeItems,
@@ -179,6 +182,60 @@ describe('currentNarrativeOrder', () => {
   it('puts an empty container past anything that could be inside it', () => {
     const empty = { ...index, documents: [doc('x', 'tv', 'season', 3, '0003', '', 'container')] };
     expect(currentNarrativeOrder(ref('x', null), empty)).toBe('0003.9999');
+  });
+});
+
+describe('placedRef', () => {
+  const orders = new Map([
+    ['s9', { workKey: 'w2', order: '0003.0001' }],
+    ['e2', { workKey: 'w1', order: '0005.0002' }],
+  ]);
+  const at = (documentKey: string, sceneKey: string | null) => ({
+    workKey: 'w1',
+    documentKey,
+    sceneKey,
+    order: '0001.0001.0007',
+  });
+
+  it('takes work and position from the scene key, ignoring the stored order', () => {
+    expect(placedRef(at('e2', 's9'), orders)).toMatchObject({ workKey: 'w2', order: '0003.0001' });
+  });
+
+  it('uses the document position for a whole-document reference', () => {
+    expect(placedRef(at('e2', null), orders).order).toBe('0005.0002');
+    expect(placedRef(at('e2', ''), orders).order).toBe('0005.0002');
+  });
+
+  it("keeps a gone scene's number under its episode, and the hint when the episode is gone", () => {
+    expect(placedRef(at('e2', 'gone'), orders).order).toBe('0005.0002.0007');
+    expect(placedRef(at('gone', 'gone'), orders).order).toBe('0001.0001.0007');
+  });
+
+  it('leaves a label-only item alone', () => {
+    const label = labelOnlyRef('Somewhere');
+    expect(placedRef(label, orders)).toEqual(label);
+  });
+
+  it('treats a missing list as empty', () => {
+    expect(placedRefs(undefined, orders)).toEqual([]);
+  });
+});
+
+describe('narrativeOrderRows', () => {
+  it('has a row per document and scene, with a container at its last scene', () => {
+    const rows = narrativeOrderRows(index);
+    const row = (k: string) => rows.find((r) => r.targetKey === k);
+    expect(row('s1')).toMatchObject({ targetKind: 'document', order: '0001.0002.0002' });
+    expect(row('e2')).toMatchObject({ targetKind: 'document', order: '0001.0002' });
+    expect(row('c')).toMatchObject({ targetKind: 'scene', order: '0001.0002.0002' });
+  });
+
+  it('keeps one row for a scene key found twice, at the earliest place', () => {
+    const copy = { ...index.scenes.at(-1)!, order: '0000.0001' };
+    const rows = narrativeOrderRows({ ...index, scenes: [...index.scenes, copy] });
+    expect(rows.filter((r) => r.targetKey === copy.sceneKey)).toEqual([
+      expect.objectContaining({ order: '0000.0001' }),
+    ]);
   });
 });
 

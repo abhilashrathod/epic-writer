@@ -16,12 +16,7 @@ import {
 import { commit, commitInSession, versionBody, type Change } from './commit';
 import { emptyOverview, emptyVisual } from './defaults';
 import { Invalid, NotFound } from './errors';
-import {
-  applyTreeChanges,
-  loadNarrativeIndex,
-  narrativeOrderChanges,
-  syncSceneOrders,
-} from './narrative-index';
+import { syncNarrativeOrder } from './narrative-index';
 import {
   DEFAULT_LEVELS,
   levelNamesSchema,
@@ -165,9 +160,8 @@ function renumber(ordered: DocumentDoc[], parentPath: string, all: DocumentDoc[]
 }
 
 /**
- * Commits a change to the document tree together with every stored narrative order it shifts, then
- * moves the scene rows to match. A new last episode shifts where its container ends, so additions
- * come through here too.
+ * Commits a change to the document tree and updates positions in the same transaction. A new last
+ * episode shifts where its container ends, so additions come through here too.
  */
 async function commitTree(
   db: Db,
@@ -176,14 +170,8 @@ async function commitTree(
   message: string,
   changes: Change[],
 ): Promise<void> {
-  const index = applyTreeChanges(await loadNarrativeIndex(db, ctx, session), changes);
-  await commitInSession(db, session, {
-    ...ctx.scope,
-    message,
-    author: author(ctx),
-    changes: [...changes, ...(await narrativeOrderChanges(db, ctx, index, session))],
-  });
-  await syncSceneOrders(db, session, ctx);
+  await commitInSession(db, session, { ...ctx.scope, message, author: author(ctx), changes });
+  await syncNarrativeOrder(db, session, ctx);
 }
 
 async function inTransaction(db: Db, run: (session: ClientSession) => Promise<void>) {

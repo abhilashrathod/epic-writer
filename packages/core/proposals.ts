@@ -38,8 +38,7 @@ import { commitInSession, type Change } from './commit';
 import { entityChange, takenSlugs, type PendingEntities } from './entities';
 import { Conflict, DomainError, Invalid, NotFound } from './errors';
 import { factChange } from './facts';
-import { loadNarrativeIndex } from './narrative-index';
-import { currentNarrativeOrder, isNarrativeRefKind } from './narrative-refs';
+import { isNarrativeRefKind } from './narrative-refs';
 import { matchCandidates, nameScore, normaliseName, STRONG_MATCH } from './identity';
 import { linkChange } from './links';
 import type { ProjectContext } from './works';
@@ -771,8 +770,6 @@ export async function applyProposal(
     );
     changes.push(built.change);
   }
-  // Episodes may have moved since this proposal was written.
-  const places = later.length ? await loadNarrativeIndex(db, ctx) : null;
   for (const { op, payload, index } of later) {
     const built = await blame(index, () => {
       if (op === 'addFact') {
@@ -781,10 +778,6 @@ export async function applyProposal(
           ...pl,
           entityKey: resolve(pl.entity),
           value: resolveValue(pl.value),
-          narrativeRefs: pl.narrativeRefs.map((r) => ({
-            ...r,
-            order: currentNarrativeOrder(r, places!) ?? r.order,
-          })),
         };
         return factChange(db, ctx, raw, opts);
       }

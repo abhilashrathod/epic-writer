@@ -6,6 +6,8 @@ import {
   isNarrativeRefKind,
   narrativeItems,
   narrativeRefReached,
+  placedRef,
+  type NarrativeOrders,
   type NarrativeIndex,
 } from './narrative-refs';
 import { lifeAt, lifeFields, resolveFields, timedStatus, type AsOf } from './asof';
@@ -69,9 +71,12 @@ export interface ContextLinkType {
   symmetric: boolean;
 }
 
+const NO_ORDERS: NarrativeOrders = new Map();
+
 export interface CodexContextInput {
   /** Names places in the story. */
   narrative?: NarrativeIndex;
+  orders?: NarrativeOrders;
   entities: ContextEntity[];
   links: ContextLink[];
   facts: ContextFact[];
@@ -243,7 +248,9 @@ export function buildCodexContext(
       const raw = values[f.key];
       const refs =
         isNarrativeRefKind(f.kind) || (f.kind === 'list' && NARRATIVE_REF_FIELDS.has(f.key))
-          ? narrativeItems(raw).filter((r) => !opts.excludePlanned || narrativeRefReached(r, asOf))
+          ? narrativeItems(raw)
+              .map((r) => placedRef(r, input.orders ?? NO_ORDERS))
+              .filter((r) => !opts.excludePlanned || narrativeRefReached(r, asOf))
           : null;
       const v = refs
         ? refs.map((r) => describeNarrativeRef(r, input.narrative)).join(', ') || null

@@ -10,6 +10,7 @@ import {
 } from '@epic/db';
 import { assignSceneKeys, splitTitlePage, stripMarkers } from '@epic/fountain';
 import { Conflict, Invalid, NotFound } from './errors';
+import { syncNarrativeOrder } from './narrative-index';
 import { saveWorkingText } from './save';
 import { createDocument, getWorkingText, type ProjectContext } from './works';
 
@@ -182,9 +183,13 @@ export async function restoreProject(
   };
   const session = db.client.startSession();
   try {
-    const n = await session.withTransaction(() =>
-      backups.replaceProject(db, project, rows, session),
-    );
+    const n = await session.withTransaction(async () => {
+      const restored = await backups.replaceProject(db, project, rows, session);
+      // Older backups have no positions, and these are derived either way.
+      const scope = { projectId: project._id, branchId: project.mainBranchId };
+      await syncNarrativeOrder(db, session, { project, scope, userId: opts.ownerId });
+      return restored;
+    });
     return { projectId: project._id, rows: n };
   } finally {
     await session.endSession();

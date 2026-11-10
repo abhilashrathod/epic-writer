@@ -13,6 +13,7 @@ export const PROJECT_COLLECTIONS = [
   'jobs',
   'documentVersions',
   'scenes',
+  'narrativeOrder',
   'annotations',
   'proposals',
   'continuityIssues',

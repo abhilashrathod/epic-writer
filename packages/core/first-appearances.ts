@@ -8,6 +8,8 @@ import {
 } from '@epic/db';
 import { classifyLines, extractScenes, findMarkers } from '@epic/fountain';
 import { commitInSession, versionBody, type Change } from './commit';
+import { loadNarrativeOrders } from './narrative-index';
+import { placedRef, type NarrativeOrders } from './narrative-refs';
 import type { ProjectContext } from './works';
 
 type DocShape = Pick<DocumentDoc, 'key' | 'workKey' | 'orderPath' | 'format'>;
@@ -67,8 +69,9 @@ async function firstElsewhere(
   return best;
 }
 
+// By key alone: a scene that only changed position is still the same first appearance.
 const sameRef = (a?: NarrativeRef, b?: NarrativeRef) =>
-  a?.documentKey === b?.documentKey && a?.sceneKey === b?.sceneKey && a?.order === b?.order;
+  a?.documentKey === b?.documentKey && a?.sceneKey === b?.sceneKey;
 
 /**
  * Keeps `entities.firstAppearances` right for `doc`'s work after its text changed, inside the
@@ -96,6 +99,7 @@ export async function updateFirstAppearances(
     { session },
   );
   const changes: Change[] = [];
+  let orders: NarrativeOrders | undefined;
   for (const e of heads) {
     const stored = e.firstAppearances.find((r) => r.workKey === doc.workKey);
     const here = found.get(e.key);
@@ -103,8 +107,11 @@ export async function updateFirstAppearances(
     if (stored?.documentKey === doc.key) {
       // The stored one was the work's earliest, so other documents only come later than this one.
       next = here ?? (await firstElsewhere(db, session, ctx, e.key, doc));
+    } else if (here && stored) {
+      orders ??= await loadNarrativeOrders(db, ctx, session);
+      next = here.order < placedRef(stored, orders).order ? here : stored;
     } else {
-      next = here && (!stored || here.order < stored.order) ? here : stored;
+      next = here ?? stored;
     }
     if (sameRef(next, stored)) continue;
     const others = e.firstAppearances.filter((r) => r.workKey !== doc.workKey);

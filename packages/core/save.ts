@@ -12,7 +12,7 @@ import {
 import { classifyLines, extractScenes, findMarkers, textStats } from '@epic/fountain';
 import { markStaleOnSave } from './continuity';
 import { updateFirstAppearances } from './first-appearances';
-import { refreshNarrativeOrders } from './narrative-index';
+import { syncNarrativeOrder } from './narrative-index';
 import { Conflict, Invalid, NotFound } from './errors';
 import type { ProjectContext } from './works';
 
@@ -132,9 +132,10 @@ export async function saveWorkingText(
       const priorScenes = await scenes.listForDocument(db, where, { session });
       const nextScenes = deriveScenes(ctx, doc, input.text);
       await scenes.replaceForDocument(db, where, nextScenes, { session });
-      await updateFirstAppearances(db, session, ctx, doc, input.text);
+      // Before first appearances, which compare against other documents' current positions.
       if (sceneLayout(priorScenes) !== sceneLayout(nextScenes))
-        await refreshNarrativeOrders(db, session, ctx);
+        await syncNarrativeOrder(db, session, ctx);
+      await updateFirstAppearances(db, session, ctx, doc, input.text);
       if (before) await markStaleOnSave(db, issues, before.text, input.text, { session });
 
       const last = await documentVersions.latestSnapshot(db, where, { session });

@@ -1,6 +1,6 @@
 # Epic Writer data model
 
-MongoDB, 26 collections, locked for all phases. Features ship in phases; the schema doesn't. Ask before changing anything here.
+MongoDB, 27 collections, locked for all phases. Features ship in phases; the schema doesn't. Ask before changing anything here.
 
 ## Conventions
 
@@ -25,7 +25,7 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 **Shared shapes**
 
 - `storyTime`: `{ start: int, end: int | null, precision: 'day'|'month'|'year'|'era'|'unknown' }`. Day index from the project epoch; negative allowed.
-- `narrativeRef`: `{ workKey, documentKey, sceneKey, order }`. `order` = zero-padded path, e.g. `0001.0002.0014`.
+- `narrativeRef`: `{ workKey, documentKey, sceneKey, order }`. `order` = zero-padded path, e.g. `0001.0002.0014`, recorded when the reference was written. It is a hint only: position is read through **narrativeOrder** by key, and the hint is used only when nothing is known of the keys.
 - `canonState`: `'canon' | 'tentative' | 'scrapped'`.
 - `origin`: `'user' | 'ai' | 'import'`, with optional `proposalId`.
 - `overview`: `{ logline, tagline, synopsisShort, synopsisLong, premise, genres[], tone, hook, arc, keyQuestions[], themeKeys[] }`.
@@ -76,6 +76,8 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 
 **scenes** (plain, derived on save): `projectId, branchId, sceneKey, workKey, documentKey, order, heading, range{ from, to }, locationKey, storyTime, storylineKeys[], povEntityKey, entityKeys[], speakingEntityKeys[], wordCount, estDuration`.
 
+**narrativeOrder** (plain, derived): `projectId, branchId, workKey, targetKind: 'document'|'scene', targetKey, order`. Where each document and scene sits now; a container counts at its last scene. Rewritten, in the same transaction, by anything that changes the document tree or the scene layout, so position changes never re-version what points at them.
+
 **storylines** (versioned): `name, color, workKey|null, focusEntityKeys[], description`.
 
 **beats** (versioned): `workKey, documentKey, order, title, summary, storylineKeys[], entityKeys[], structureTag, status: 'idea'|'planned'|'written'|'cut', sceneKey`.
@@ -121,6 +123,7 @@ Plain collections carry `createdAt`/`updatedAt`; those holding branch-specific d
 | documents        | `{ projectId, branchId, workKey, parentKey, number }` partial on head                                            |
 | documentVersions | `{ documentKey, branchId, kind, createdAt }`; unique partial `{ documentKey, branchId }` where `kind: 'working'` |
 | scenes           | `{ projectId, branchId, workKey, order }`; `{ projectId, branchId, entityKeys }`                                 |
+| narrativeOrder   | `{ projectId, branchId, targetKey }` unique                                                                      |
 | beats            | `{ projectId, branchId, workKey, documentKey, order }` partial on head                                           |
 | commits          | `{ projectId, seq }` unique; `{ projectId, branchId, seq }`                                                      |
 | branches         | `{ projectId, name }` unique                                                                                     |

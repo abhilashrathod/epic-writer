@@ -429,6 +429,17 @@ export type SceneDoc = BranchScoped<{
   estDuration: number;
 }>;
 
+/** Where a document or scene sits now. Derived from the tree and the scene rows, never by hand. */
+export interface NarrativeOrderDoc {
+  _id: ObjectId;
+  projectId: ObjectId;
+  branchId: ObjectId;
+  workKey: string;
+  targetKind: 'document' | 'scene';
+  targetKey: string;
+  order: string;
+}
+
 export type StorylineDoc = Versioned<{
   name: string;
   color: string;
@@ -616,6 +627,7 @@ export interface PlainCollections {
   jobs: JobDoc;
   documentVersions: DocumentVersionDoc;
   scenes: SceneDoc;
+  narrativeOrder: NarrativeOrderDoc;
   annotations: AnnotationDoc;
   proposals: ProposalDoc;
   continuityIssues: ContinuityIssueDoc;
@@ -652,6 +664,7 @@ export const PLAIN_COLLECTIONS = [
   'jobs',
   'documentVersions',
   'scenes',
+  'narrativeOrder',
   'annotations',
   'proposals',
   'continuityIssues',

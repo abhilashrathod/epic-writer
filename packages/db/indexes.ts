@@ -82,6 +82,12 @@ export const INDEXES: IndexDef[] = [
   },
   { collection: 'scenes', name: 'entities', spec: { projectId: 1, branchId: 1, entityKeys: 1 } },
   {
+    collection: 'narrativeOrder',
+    name: 'target_unique',
+    spec: { projectId: 1, branchId: 1, targetKey: 1 },
+    options: { unique: true },
+  },
+  {
     collection: 'beats',
     name: 'order',
     spec: { projectId: 1, branchId: 1, workKey: 1, documentKey: 1, order: 1 },

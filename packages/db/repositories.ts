@@ -9,11 +9,13 @@ import type {
   DocumentVersionDoc,
   JobDoc,
   JobType,
+  NarrativeOrderDoc,
   ProjectDoc,
   ProposalDoc,
   SceneDoc,
   UserDoc,
 } from './collections';
+import type { BranchScope } from './versioned-reads';
 
 /**
  * Scope for system rows that belong to no project (worker heartbeats). The data model has no
@@ -460,6 +462,50 @@ export const scenes = {
       })),
       opts,
     );
+  },
+};
+
+// ---------- narrativeOrder ----------
+
+export type NarrativeOrderRow = Pick<
+  NarrativeOrderDoc,
+  'workKey' | 'targetKind' | 'targetKey' | 'order'
+>;
+
+export const narrativeOrder = {
+  list: (db: Db, p: BranchScope, opts: Opts = {}) =>
+    col(db, 'narrativeOrder').find(p, opts).toArray(),
+  /** Makes the rows match `wanted`, writing only the ones that differ. Returns how many it wrote. */
+  async sync(
+    db: Db,
+    p: BranchScope,
+    wanted: NarrativeOrderRow[],
+    opts: Opts = {},
+  ): Promise<number> {
+    const have = new Map((await narrativeOrder.list(db, p, opts)).map((r) => [r.targetKey, r]));
+    const changed = wanted.filter((w) => {
+      const h = have.get(w.targetKey);
+      return !h || h.order !== w.order || h.workKey !== w.workKey || h.targetKind !== w.targetKind;
+    });
+    const keep = new Set(wanted.map((w) => w.targetKey));
+    const gone = [...have.keys()].filter((k) => !keep.has(k));
+    if (!changed.length && !gone.length) return 0;
+    await col(db, 'narrativeOrder').bulkWrite(
+      [
+        ...changed.map(({ targetKey, ...set }) => ({
+          updateOne: {
+            filter: { projectId: p.projectId, branchId: p.branchId, targetKey },
+            update: { $set: set },
+            upsert: true,
+          },
+        })),
+        ...gone.map((targetKey) => ({
+          deleteOne: { filter: { projectId: p.projectId, branchId: p.branchId, targetKey } },
+        })),
+      ],
+      opts,
+    );
+    return changed.length + gone.length;
   },
 };
 

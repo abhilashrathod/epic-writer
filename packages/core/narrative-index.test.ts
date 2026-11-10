@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ObjectId, type Db } from 'mongodb';
-import { commits, readHeadByKey } from '@epic/db';
+import { readHeadByKey } from '@epic/db';
 import { createTestDb } from '@epic/db/testing';
 import { commit, versionBody } from './commit';
 import { createProject } from './create-project';
@@ -11,13 +11,7 @@ import { loadNarrativeIndex, migrateNarrativeRefs } from './narrative-index';
 import { isNarrativeRefKind } from './narrative-refs';
 import { saveWorkingText } from './save';
 import { TYPE_CATALOGUE } from './type-catalogue';
-import {
-  createDocument,
-  createWork,
-  moveDocument,
-  openProject,
-  type ProjectContext,
-} from './works';
+import { createDocument, createWork, openProject, type ProjectContext } from './works';
 
 describe('narrative references in a project', () => {
   let db: Db;
@@ -177,67 +171,6 @@ describe('narrative references in a project', () => {
       { documentKey: null, label: 'nowhere yet' },
     ]);
   }, 30_000);
-
-  describe('keeping orders current', () => {
-    const scriptOf = (...keys: string[]) =>
-      keys.map((k) => `INT. ROOM ${k.toUpperCase()} - DAY [[@s:${k}]]\n\nA line.`).join('\n\n');
-    const stored = async (key: string) =>
-      ((await head(key)).fields.paidOffAt as { order: string }[])[0]!.order;
-    const place = (documentKey: string, sceneKey: string | null) => ({
-      workKey,
-      documentKey,
-      sceneKey,
-      order: '0001',
-    });
-    const docHead = async (key: string) => (await readHeadByKey(db, 'documents', ctx.scope, key))!;
-
-    it('follows a scene when a save moves it, in an automatic commit', async () => {
-      const key = await createEntity(db, ctx, {
-        typeKey,
-        name: 'Follows',
-        fields: { paidOffAt: [place(episode, 's2')] },
-      });
-      const path = (await docHead(episode)).orderPath;
-      expect(await stored(key)).toBe(`${path}.0002`);
-      await saveWorkingText(db, ctx, {
-        documentKey: episode,
-        text: scriptOf('s0', 's1', 's2', 's3'),
-        baseVersion: 1,
-      });
-      expect(await stored(key)).toBe(`${path}.0003`);
-      const row = await commits.find(db, { ...ctx.scope, seq: (await head(key)).seq });
-      expect(row).toMatchObject({ auto: true });
-    });
-
-    it('moves a container to its new end when an episode is added', async () => {
-      const key = await createEntity(db, ctx, {
-        typeKey,
-        name: 'Whole season',
-        fields: { paidOffAt: [place(season, null)] },
-      });
-      expect(await stored(key)).toMatch(/\.0004$/);
-      const later = await createDocument(db, ctx, { workKey, parentKey: season, title: 'Later' });
-      expect(await stored(key)).toBe((await docHead(later)).orderPath);
-    });
-
-    it('puts everything back when a move is undone', async () => {
-      const key = await createEntity(db, ctx, {
-        typeKey,
-        name: 'Undone',
-        fields: { paidOffAt: [place(episode, 's2')] },
-      });
-      const before = await stored(key);
-      const sceneOrder = async () =>
-        (await loadNarrativeIndex(db, ctx)).scenes.find((s) => s.sceneKey === 's2')!.order;
-      expect(await sceneOrder()).toBe(before);
-      await moveDocument(db, ctx, episode, 'down');
-      expect(await stored(key)).not.toBe(before);
-      expect(await sceneOrder()).toBe(await stored(key));
-      await undoCommit(db, ctx, (await docHead(episode)).seq);
-      expect(await stored(key)).toBe(before);
-      expect(await sceneOrder()).toBe(before);
-    }, 30_000);
-  });
 
   it('leaves only Motif appearances and Theme key scenes to extraction', () => {
     const extract = TYPE_CATALOGUE.flatMap((t) =>

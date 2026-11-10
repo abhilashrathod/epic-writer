@@ -9,7 +9,7 @@ import {
 } from '@epic/db';
 import { commitInSession, versionBody, type Change, type CommitResult } from './commit';
 import { Conflict, Invalid, NotFound } from './errors';
-import { refreshNarrativeOrders, syncSceneOrders } from './narrative-index';
+import { syncNarrativeOrder } from './narrative-index';
 import type { ProjectContext } from './works';
 
 export interface CommitSummary {
@@ -139,11 +139,9 @@ export async function undoCommit(db: Db, ctx: ProjectContext, seq: number): Prom
         author: { kind: 'user', userId: ctx.userId },
         changes,
       });
-      // Scene rows aren't versioned and first appearances are kept above, so they follow here.
-      if (rows.some((t) => t.collection === 'documents')) {
-        await syncSceneOrders(db, session, ctx);
-        await refreshNarrativeOrders(db, session, ctx);
-      }
+      // Positions aren't versioned, so they follow the restored tree here.
+      if (rows.some((t) => t.collection === 'documents'))
+        await syncNarrativeOrder(db, session, ctx);
       return undone;
     });
   } catch (e) {

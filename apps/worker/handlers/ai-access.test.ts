@@ -15,6 +15,7 @@ import {
   resolveFields,
   saveAiKey,
   saveWorkingText,
+  worldSnapshot,
   timedStatus,
   TYPE_CATALOGUE,
   type ProjectContext,
@@ -276,7 +277,7 @@ describe('AI field access', () => {
     expect(allOutput()).toContain('somewhere vague');
   }, 30_000);
 
-  it('keeps every stored order right when an episode moves, in one commit', async () => {
+  it("agrees on an episode's new place without rewriting what points at it", async () => {
     const two = await createDocument(db, ctx, {
       workKey,
       parentKey: seasonKey,
@@ -327,7 +328,7 @@ describe('AI field access', () => {
 
     // Position two: "Second Wind" before the move, "Third Gate" after it.
     const asOf = { storyTime: null, workKey, order: `${(await docHead(two))!.orderPath}.9999` };
-    const fact = async () => (await readHeadByKey(db, 'facts', ctx.scope, factKey))!;
+    const fact = async () => (await worldSnapshot(db, ctx)).facts.find((f) => f.key === factKey)!;
     const ask = async () => {
       spy.sent.length = 0;
       await run('ask', { question: 'What of Bow Promise and Gate Warden?', asOf });
@@ -345,20 +346,17 @@ describe('AI field access', () => {
     const moved = (await docHead(three))!;
     const order = `${moved.orderPath}.0001`;
     expect(`${moved.orderPath}.9999`).toBe(asOf.order);
-    const head = async (key: string) => (await readHeadByKey(db, 'entities', ctx.scope, key))!;
-    const paid = (await head(promise)).fields.paidOffAt as { order: string }[];
-    const link = (await readHeadByKey(db, 'links', ctx.scope, linkKey))!;
-    expect(paid[0]!.order).toBe(order);
+    const world = await worldSnapshot(db, ctx);
     expect((await fact()).narrativeRefs[0]!.order).toBe(order);
-    expect(link.narrativeRefs[0]!.order).toBe(order);
-    expect((await head(warden)).firstAppearances[0]!.order).toBe(order);
+    expect(world.links.find((l) => l.key === linkKey)!.narrativeRefs[0]!.order).toBe(order);
+    expect(world.entities.find((e) => e.key === warden)!.firstAppearances[0]!.order).toBe(order);
     expect((await scenes.listForDocument(db, { ...ctx.scope, documentKey: three }))[0]!.order).toBe(
       order,
     );
-    // One commit moved the episode and everything pointing at it.
-    expect(new Set([moved.seq, (await fact()).seq, link.seq, (await head(promise)).seq]).size).toBe(
-      1,
-    );
+    // The move rewrote the two episodes and nothing that points at them.
+    expect(new Set([(await fact()).seq, moved.seq]).size).toBe(2);
+    const head = (await readHeadByKey(db, 'entities', ctx.scope, promise))!;
+    expect(head.seq).toBeLessThan(moved.seq);
 
     expect(timedStatus(await fact(), asOf)).toBe('past');
     expect(await statusAsOf()).toBe(status.options.at(-1));
